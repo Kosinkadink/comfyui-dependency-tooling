@@ -220,6 +220,27 @@ def analyze_wildcard_dependencies(nodes_dict, pattern):
     return matching_deps
 
 
+def calculate_node_ranks(nodes_dict):
+    """
+    Calculate download ranks for all nodes.
+
+    Args:
+        nodes_dict: Dictionary of nodes
+
+    Returns:
+        Dictionary mapping node_id to rank (1-based)
+    """
+    # Sort all nodes by downloads
+    sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+
+    # Create rank mapping
+    rank_map = {}
+    for rank, (node_id, _) in enumerate(sorted_nodes, 1):
+        rank_map[node_id] = rank
+
+    return rank_map
+
+
 def analyze_specific_dependency(nodes_dict, dep_name):
     """
     Analyze a specific dependency across all nodes.
@@ -237,6 +258,9 @@ def analyze_specific_dependency(nodes_dict, dep_name):
     all_versions = []
     version_count = defaultdict(int)
     nodes_with_commented = []
+
+    # Calculate ranks for all nodes
+    rank_map = calculate_node_ranks(nodes_dict)
 
     for node_id, node_data in nodes_dict.items():
         if 'latest_version' in node_data and node_data['latest_version']:
@@ -287,6 +311,7 @@ def analyze_specific_dependency(nodes_dict, dep_name):
                             'dependency_spec': dep_str,
                             'stars': node_data.get('github_stars', 0),
                             'downloads': node_data.get('downloads', 0),
+                            'rank': rank_map.get(node_id, 0),
                             'latest_version_date': latest_version_date
                         })
 
@@ -380,7 +405,7 @@ def format_dependency_details(result, show_all_nodes=False):
         lines.append(f"\nNodes using {result['dependency_name']} ({'all' if show_all_nodes else 'showing first 10 by popularity'}):")
         for i, node in enumerate(nodes_to_show, 1):
             lines.append(f"\n  {i}. {node['node_name']} ({node['node_id']})")
-            lines.append(f"     Stars: {node.get('stars', 0):,} | Downloads: {node.get('downloads', 0):,} | Latest: {node.get('latest_version_date', 'N/A')}")
+            lines.append(f"     Rank: #{node.get('rank', 'N/A')} | Downloads: {node.get('downloads', 0):,} | Stars: {node.get('stars', 0):,} | Latest: {node.get('latest_version_date', 'N/A')}")
             lines.append(f"     Spec: {node['dependency_spec']}")
             lines.append(f"     Repo: {node['repository']}")
 
@@ -405,12 +430,18 @@ def interactive_mode(nodes_dict):
     print("="*60)
     print("\nEnter a dependency name to analyze (or use /quit to exit)")
     print("\nCommands:")
-    print("  /list  - Show all unique dependency names")
+    print("  /list  - Show all unique dependency names (use &dupes for version conflicts)")
     print("  /top   - Show the most common dependencies")
+    print("  /nodes - Show details about nodes (sorted by downloads)")
     print("  /help  - Show this help message")
     print("  /quit  - Exit interactive mode")
-    print("\nYou can use * as a wildcard (e.g., torch*, *audio*)")
-    print("Add &save to any query to save results to a file (e.g., numpy &save)\n")
+    print("\nSearch modifiers:")
+    print("  * - Use wildcards (e.g., torch*, *audio*)")
+    print("  &save - Save results to a file")
+    print("  &all - Show all results without limits")
+    print("  &top N - Only analyze top N nodes by downloads (e.g., &top 100)")
+    print("           Use negative for bottom N (e.g., &top -10 for least downloaded)")
+    print("  Combine modifiers: numpy &top 50 &save\n")
 
     # Pre-compile all dependencies for quick lookup
     dep_analysis = compile_dependencies(nodes_dict)
@@ -429,43 +460,376 @@ def interactive_mode(nodes_dict):
             elif query.lower() == '/help':
                 print("\nCommands:")
                 print("  /list  - Show all unique dependency names")
+                print("         Use &dupes to show only deps with version conflicts")
                 print("  /top   - Show the most common dependencies")
+                print("  /nodes - Show details about nodes (sorted by downloads)")
                 print("  /help  - Show this help message")
                 print("  /quit  - Exit interactive mode")
                 print("\nSearch modifiers:")
                 print("  * - Wildcard (e.g., torch*, *audio*)")
-                print("  &save - Save results to file (e.g., numpy &save, torch* &save)")
+                print("  &save - Save results to file")
+                print("  &all - Show all results without limits")
+                print("  &top N - Only analyze top N nodes by downloads")
+                print("         Use negative for bottom N (e.g., &top -10)")
+                print("  Combine: numpy &top 50 &save")
                 print("\nOr type a dependency name directly (e.g., numpy, torch)")
 
-            elif query.lower() == '/list':
-                sorted_deps = sorted(dep_analysis['unique_base_dependencies'], key=str.lower)
-                print(f"\nAll unique package names ({len(sorted_deps)} total):")
-                print("(Versions are grouped together under base package names)")
-                # Print in columns for readability
-                for i in range(0, len(sorted_deps), 3):
-                    row = sorted_deps[i:i+3]
-                    print("  " + " | ".join(f"{dep:30}" for dep in row))
-
-            elif query.lower() == '/top':
-                print("\nTop 20 most common dependencies:")
-                for dep, count in dep_analysis['sorted_by_frequency'][:20]:
-                    print(f"  {dep:30} - {count} nodes")
-
-            elif query:
-                # Check for &save modifier
+            elif query.lower() == '/list' or query.lower().startswith('/list '):
+                # Check for modifiers in /list command
+                working_nodes = nodes_dict
+                top_n = None
+                show_dupes = False
                 save_results = False
                 original_query = query
+
+                # Parse &dupes modifier
+                if '&dupes' in query.lower():
+                    show_dupes = True
+
+                # Parse &save modifier
                 if '&save' in query.lower():
                     save_results = True
-                    query = query.lower().replace('&save', '').strip()
+
+                # Parse &top modifier if present
+                if '&top' in query.lower():
+                    import re
+                    top_match = re.search(r'&top\s+(-?\d+)', query.lower())
+                    if top_match:
+                        top_n = int(top_match.group(1))
+                        # Filter to top N nodes by downloads
+                        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+                        if top_n > 0:
+                            working_nodes = dict(sorted_nodes[:top_n])
+                            print(f"\n[Filtering to top {top_n} nodes by downloads]")
+                        else:
+                            # Negative number means bottom N nodes
+                            working_nodes = dict(sorted_nodes[top_n:])
+                            print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
+
+                # Re-compile dependencies for the filtered set
+                filtered_dep_analysis = compile_dependencies(working_nodes)
+
+                if show_dupes:
+                    # Show only dependencies with multiple versions
+                    dupes_only = []
+                    for dep_name, versions in filtered_dep_analysis['dependency_versions'].items():
+                        if len(versions) > 1:
+                            count = filtered_dep_analysis['dependency_count'].get(dep_name, 0)
+                            dupes_only.append((dep_name, count, versions))
+
+                    # Sort by count (most used first), then alphabetically
+                    dupes_only.sort(key=lambda x: (-x[1], x[0].lower()))
+
+                    output_lines = []
+                    if top_n:
+                        if top_n > 0:
+                            output_lines.append(f"\nDependencies with multiple versions in top {top_n} nodes ({len(dupes_only)} total):")
+                        else:
+                            output_lines.append(f"\nDependencies with multiple versions in bottom {abs(top_n)} nodes ({len(dupes_only)} total):")
+                    else:
+                        output_lines.append(f"\nDependencies with multiple versions ({len(dupes_only)} total):")
+
+                    output_lines.append("(Shows packages that have different version specifications across nodes)")
+                    output_lines.append("")
+
+                    for dep_name, count, versions in dupes_only:
+                        output_lines.append(f"\n{dep_name} ({count} nodes total, {len(versions)} different specs):")
+                        # Sort versions by frequency
+                        version_list = list(versions)
+                        version_counts = []
+                        for v in version_list:
+                            # Count how many nodes use this specific version
+                            v_count = sum(1 for node_id, node_data in working_nodes.items()
+                                        if 'latest_version' in node_data and node_data['latest_version']
+                                        and 'dependencies' in node_data['latest_version']
+                                        and any(str(d).strip() == v for d in node_data['latest_version']['dependencies']))
+                            version_counts.append((v, v_count))
+
+                        version_counts.sort(key=lambda x: -x[1])
+                        for v, v_count in version_counts:  # Show all versions
+                            output_lines.append(f"  {v:40} ({v_count} nodes)")
+
+                    # Print output
+                    output_text = '\n'.join(output_lines)
+                    print(output_text)
+
+                    # Save if requested
+                    if save_results:
+                        save_results_to_file("list_dupes_" + original_query.replace('/list', '').strip(), output_text)
+
+                else:
+                    # Normal /list behavior
+                    # Sort dependencies alphabetically but include counts
+                    deps_with_counts = [(dep, filtered_dep_analysis['dependency_count'].get(dep, 0))
+                                       for dep in filtered_dep_analysis['unique_base_dependencies']]
+                    deps_with_counts.sort(key=lambda x: x[0].lower())
+
+                    if top_n:
+                        if top_n > 0:
+                            print(f"\nUnique package names in top {top_n} nodes ({len(deps_with_counts)} total):")
+                        else:
+                            print(f"\nUnique package names in bottom {abs(top_n)} nodes ({len(deps_with_counts)} total):")
+                    else:
+                        print(f"\nAll unique package names ({len(deps_with_counts)} total):")
+                    print("(Versions are grouped together under base package names)")
+                    print("(Number in parentheses shows how many nodes use this dependency)")
+
+                    # Print in columns for readability with counts
+                    for i in range(0, len(deps_with_counts), 2):
+                        row = deps_with_counts[i:i+2]
+                        print("  " + " | ".join(f"{dep:30} ({count:3})" for dep, count in row))
+
+                    # Save if requested
+                    if save_results:
+                        output_lines = []
+                        if top_n:
+                            if top_n > 0:
+                                output_lines.append(f"Unique package names in top {top_n} nodes ({len(deps_with_counts)} total):")
+                            else:
+                                output_lines.append(f"Unique package names in bottom {abs(top_n)} nodes ({len(deps_with_counts)} total):")
+                        else:
+                            output_lines.append(f"All unique package names ({len(deps_with_counts)} total):")
+                        output_lines.append("(Versions are grouped together under base package names)")
+                        output_lines.append("(Number in parentheses shows how many nodes use this dependency)\n")
+
+                        for dep, count in deps_with_counts:
+                            output_lines.append(f"{dep:40} ({count:3})")
+
+                        save_text = '\n'.join(output_lines)
+                        save_results_to_file("list_" + original_query.replace('/list', '').strip(), save_text)
+
+            elif query.lower() == '/top' or query.lower().startswith('/top '):
+                # Check for &top modifier in /top command
+                working_nodes = nodes_dict
+                top_n = None
+
+                # Parse &top modifier if present
+                if '&top' in query.lower():
+                    import re
+                    top_match = re.search(r'&top\s+(-?\d+)', query.lower())
+                    if top_match:
+                        top_n = int(top_match.group(1))
+                        # Filter to top N nodes by downloads
+                        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+                        if top_n > 0:
+                            working_nodes = dict(sorted_nodes[:top_n])
+                            print(f"\n[Filtering to top {top_n} nodes by downloads]")
+                        else:
+                            # Negative number means bottom N nodes
+                            working_nodes = dict(sorted_nodes[top_n:])
+                            print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
+
+                # Re-compile dependencies for the filtered set
+                filtered_dep_analysis = compile_dependencies(working_nodes)
+
+                if top_n:
+                    if top_n > 0:
+                        print(f"\nTop 20 most common dependencies in top {top_n} nodes:")
+                    else:
+                        print(f"\nTop 20 most common dependencies in bottom {abs(top_n)} nodes:")
+                else:
+                    print("\nTop 20 most common dependencies:")
+                for dep, count in filtered_dep_analysis['sorted_by_frequency'][:20]:
+                    print(f"  {dep:30} - {count} nodes")
+
+            elif query.lower() == '/nodes' or query.lower().startswith('/nodes '):
+                # Parse modifiers for /nodes command
+                save_results = False
+                show_all = False
+                top_n = None
+                working_nodes = nodes_dict
+                original_query = query
+
+                # Parse modifiers
+                if '&save' in query.lower():
+                    save_results = True
+
+                if '&all' in query.lower():
+                    show_all = True
+
+                if '&top' in query.lower():
+                    import re
+                    top_match = re.search(r'&top\s+(-?\d+)', query.lower())
+                    if top_match:
+                        top_n = int(top_match.group(1))
+                        # Filter to top N nodes by downloads
+                        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+                        if top_n > 0:
+                            working_nodes = dict(sorted_nodes[:top_n])
+                            print(f"\n[Filtering to top {top_n} nodes by downloads]")
+                        else:
+                            # Negative number means bottom N nodes
+                            working_nodes = dict(sorted_nodes[top_n:])
+                            print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
+
+                # Calculate ranks for ALL nodes (not just working_nodes)
+                full_rank_map = calculate_node_ranks(nodes_dict)
+
+                # Sort all nodes by downloads
+                sorted_nodes = sorted(working_nodes.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+
+                # Determine how many to show
+                nodes_to_display = sorted_nodes if show_all else sorted_nodes[:20]
+
+                # Build output
+                output_lines = []
+                if top_n:
+                    if top_n > 0:
+                        output_lines.append(f"\nTop {min(len(nodes_to_display), top_n)} nodes by downloads:")
+                    else:
+                        output_lines.append(f"\nBottom {min(len(nodes_to_display), abs(top_n))} nodes by downloads:")
+                elif show_all:
+                    output_lines.append(f"\nAll {len(nodes_to_display)} nodes by downloads:")
+                else:
+                    output_lines.append(f"\nTop {min(len(nodes_to_display), 20)} nodes by downloads:")
+
+                output_lines.append("="*60)
+
+                for i, (node_id, node_data) in enumerate(nodes_to_display, 1):
+                    # Extract node information
+                    name = node_data.get('name', 'N/A')
+                    downloads = node_data.get('downloads', 0)
+                    stars = node_data.get('github_stars', 0)
+                    repo = node_data.get('repository', 'N/A')
+                    description = node_data.get('description', 'N/A')
+
+                    # Get latest version info
+                    latest_version_info = node_data.get('latest_version', {})
+                    latest_date = 'N/A'
+                    version = 'N/A'
+                    dep_count = 0
+
+                    if latest_version_info:
+                        if 'createdAt' in latest_version_info:
+                            date_str = latest_version_info['createdAt']
+                            latest_date = date_str[:10] if date_str else 'N/A'
+
+                        version = latest_version_info.get('version', 'N/A')
+
+                        if 'dependencies' in latest_version_info:
+                            deps = latest_version_info['dependencies']
+                            if deps and isinstance(deps, list):
+                                # Count only active dependencies (not commented or pip commands)
+                                dep_count = sum(1 for d in deps if not str(d).strip().startswith('#') and not str(d).strip().startswith('--'))
+
+                    # Format output
+                    rank = full_rank_map.get(node_id, 'N/A')
+                    output_lines.append(f"\n{i}. {name} ({node_id})")
+                    output_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}")
+                    output_lines.append(f"   Latest: {latest_date} | Version: {version}")
+                    if len(description) > 100:
+                        output_lines.append(f"   Description: {description[:100]}...")
+                    else:
+                        output_lines.append(f"   Description: {description}")
+                    output_lines.append(f"   Repository: {repo}")
+
+                if not show_all and len(sorted_nodes) > 20:
+                    output_lines.append(f"\n... and {len(sorted_nodes) - 20} more nodes")
+                    output_lines.append("Use &all to see all nodes")
+
+                # Print output
+                output_text = '\n'.join(output_lines)
+                print(output_text)
+
+                # Save if requested
+                if save_results:
+                    # For saved file, always show all nodes in the working set
+                    save_lines = []
+                    if top_n:
+                        if top_n > 0:
+                            save_lines.append(f"All {len(sorted_nodes)} nodes (filtered to top {top_n} by downloads):")
+                        else:
+                            save_lines.append(f"All {len(sorted_nodes)} nodes (filtered to bottom {abs(top_n)} by downloads):")
+                    else:
+                        save_lines.append(f"All {len(sorted_nodes)} nodes by downloads:")
+                    save_lines.append("="*60)
+
+                    for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
+                        name = node_data.get('name', 'N/A')
+                        downloads = node_data.get('downloads', 0)
+                        stars = node_data.get('github_stars', 0)
+                        repo = node_data.get('repository', 'N/A')
+                        description = node_data.get('description', 'N/A')
+
+                        latest_version_info = node_data.get('latest_version', {})
+                        latest_date = 'N/A'
+                        version = 'N/A'
+                        dep_count = 0
+
+                        if latest_version_info:
+                            if 'createdAt' in latest_version_info:
+                                date_str = latest_version_info['createdAt']
+                                latest_date = date_str[:10] if date_str else 'N/A'
+
+                            version = latest_version_info.get('version', 'N/A')
+
+                            if 'dependencies' in latest_version_info:
+                                deps = latest_version_info['dependencies']
+                                if deps and isinstance(deps, list):
+                                    dep_count = sum(1 for d in deps if not str(d).strip().startswith('#') and not str(d).strip().startswith('--'))
+
+                        rank = full_rank_map.get(node_id, 'N/A')
+                        save_lines.append(f"\n{i}. {name} ({node_id})")
+                        save_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}")
+                        save_lines.append(f"   Latest: {latest_date} | Version: {version}")
+                        save_lines.append(f"   Description: {description}")
+                        save_lines.append(f"   Repository: {repo}")
+
+                    save_text = '\n'.join(save_lines)
+                    save_results_to_file("nodes_" + original_query.replace('/nodes', '').strip(), save_text)
+
+            elif query:
+                # Check for modifiers
+                save_results = False
+                show_all = False
+                top_n = None
+                working_nodes = nodes_dict
+                original_query = query
+
+                # Parse modifiers (case-insensitive)
+                query_lower = query.lower()
+
+                # Parse &top N modifier
+                if '&top' in query_lower:
+                    import re
+                    top_match = re.search(r'&top\s+(-?\d+)', query_lower)
+                    if top_match:
+                        top_n = int(top_match.group(1))
+                        # Remove the &top N from the query
+                        query = re.sub(r'&top\s+-?\d+', '', query, flags=re.IGNORECASE).strip()
+                        query_lower = query.lower()
+
+                        # Filter to top N nodes by downloads
+                        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+                        if top_n > 0:
+                            working_nodes = dict(sorted_nodes[:top_n])
+                            print(f"\n[Filtering to top {top_n} nodes by downloads]")
+                        else:
+                            # Negative number means bottom N nodes
+                            working_nodes = dict(sorted_nodes[top_n:])
+                            print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
+
+                if '&save' in query_lower:
+                    save_results = True
+                    query = query.replace('&save', '').replace('&SAVE', '').replace('&Save', '').strip()
+                    query_lower = query.lower()
+
+                if '&all' in query_lower:
+                    show_all = True
+                    query = query.replace('&all', '').replace('&ALL', '').replace('&All', '').strip()
 
                 # Capture output for saving if needed
                 output_lines = []
 
+                # Re-compile dependencies for the filtered set if using &top
+                if top_n:
+                    dep_analysis = compile_dependencies(working_nodes)
+                    all_deps_lower = {dep.lower(): dep for dep in dep_analysis['unique_base_dependencies']}
+
                 # Check if query contains wildcard
                 if '*' in query:
                     print(f"\nSearching for dependencies matching pattern: {query}")
-                    wildcard_results = analyze_wildcard_dependencies(nodes_dict, query)
+                    wildcard_results = analyze_wildcard_dependencies(working_nodes, query)
 
                     if wildcard_results:
                         # Sort by total nodes using each dependency
@@ -483,8 +847,8 @@ def interactive_mode(nodes_dict):
 
                         # Format each dependency's details
                         for dep_name, dep_info in sorted_results:
-                            # For display, show limited nodes; for save, show all
-                            if save_results:
+                            # Use show_all flag for display
+                            if show_all:
                                 output_lines.append(format_dependency_details(dep_info, show_all_nodes=True))
                             else:
                                 # Create limited version for display
@@ -515,8 +879,9 @@ def interactive_mode(nodes_dict):
                                     output_lines.append(f"\nTop nodes using {dep_name} (showing up to 5 by popularity):")
                                     for i, node in enumerate(sorted_nodes[:5], 1):
                                         output_lines.append(f"\n  {i}. {node['node_name']} ({node['node_id']})")
-                                        output_lines.append(f"     Stars: {node.get('stars', 0):,} | Downloads: {node.get('downloads', 0):,} | Latest: {node.get('latest_version_date', 'N/A')}")
+                                        output_lines.append(f"     Rank: #{node.get('rank', 'N/A')} | Downloads: {node.get('downloads', 0):,} | Stars: {node.get('stars', 0):,} | Latest: {node.get('latest_version_date', 'N/A')}")
                                         output_lines.append(f"     Spec: {node['dependency_spec']}")
+                                        output_lines.append(f"     Repo: {node['repository']}")
 
                                     if dep_info['total_nodes'] > 5:
                                         output_lines.append(f"\n  ... and {dep_info['total_nodes'] - 5} more nodes using {dep_name}")
@@ -562,15 +927,15 @@ def interactive_mode(nodes_dict):
                         exact_match = all_deps_lower[query_lower]
 
                     if exact_match:
-                        result = analyze_specific_dependency(nodes_dict, exact_match)
+                        result = analyze_specific_dependency(working_nodes, exact_match)
 
-                        # Format output for display
-                        output_text = format_dependency_details(result, show_all_nodes=False)
+                        # Format output for display (use show_all flag)
+                        output_text = format_dependency_details(result, show_all_nodes=show_all)
                         print(output_text)
 
                         # Save if requested
                         if save_results:
-                            # Generate full output with all nodes for saved file
+                            # Always save with all nodes shown
                             full_output = format_dependency_details(result, show_all_nodes=True)
                             save_results_to_file(original_query, full_output)
                     else:
@@ -678,12 +1043,16 @@ def main():
         for dep, count in dep_analysis['sorted_by_frequency'][:10]:
             print(f"  - {dep}: {count} nodes")
 
+        # Calculate ranks for display
+        rank_map = calculate_node_ranks(nodes_dict)
+
         print(f"\nExample nodes with dependencies (first 3):")
         for node_info in dep_analysis['nodes_with_dependencies'][:3]:
             # Get full node data for additional info
             node_data = nodes_dict.get(node_info['id'], {})
             stars = node_data.get('github_stars', 0)
             downloads = node_data.get('downloads', 0)
+            rank = rank_map.get(node_info['id'], 'N/A')
             latest_version_info = node_data.get('latest_version', {})
             latest_date = 'N/A'
             if latest_version_info and 'createdAt' in latest_version_info:
@@ -691,7 +1060,7 @@ def main():
                 latest_date = date_str[:10] if date_str else 'N/A'
 
             print(f"\n  Node: {node_info['name']} ({node_info['id']})")
-            print(f"  Stats: Stars: {stars:,} | Downloads: {downloads:,} | Latest: {latest_date}")
+            print(f"  Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Latest: {latest_date}")
             print(f"  Dependencies: {', '.join(node_info['dependencies'][:5])}")
             if len(node_info['dependencies']) > 5:
                 print(f"    ... and {len(node_info['dependencies']) - 5} more")
