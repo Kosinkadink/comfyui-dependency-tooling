@@ -2,6 +2,8 @@ import json
 import argparse
 import re
 import fnmatch
+import os
+from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
 
@@ -149,6 +151,10 @@ def compile_dependencies(nodes_dict):
     unique_dependencies_raw = list(set(all_dependencies_raw))
     unique_commented = list(set(commented_dependencies))
 
+    # Sort pip commands by frequency
+    sorted_pip_commands = sorted(pip_command_count.items(), key=lambda x: x[1], reverse=True)
+    unique_pip_commands = list(pip_command_count.keys())
+
     return {
         'all_dependencies': all_dependencies_raw,
         'unique_dependencies': unique_dependencies_raw,  # Raw unique deps for compatibility
@@ -159,14 +165,20 @@ def compile_dependencies(nodes_dict):
         'nodes_with_dependencies': nodes_with_deps,
         'nodes_without_dependencies': nodes_without_deps,
         'nodes_with_commented_dependencies': nodes_with_commented_deps,
+        'nodes_with_pip_commands': nodes_with_pip_commands,
         'commented_dependencies': commented_dependencies,
         'unique_commented_dependencies': unique_commented,
+        'pip_commands': pip_commands,
+        'unique_pip_commands': unique_pip_commands,
+        'pip_command_count': dict(pip_command_count),
+        'sorted_pip_commands': sorted_pip_commands,
         'total_dependencies': len(all_dependencies_raw),
         'unique_count': len(unique_base_dependencies),  # Count of unique base packages
         'unique_raw_count': len(unique_dependencies_raw),  # Count of unique raw specs
         'nodes_with_deps_count': len(nodes_with_deps),
         'nodes_without_deps_count': len(nodes_without_deps),
-        'nodes_with_commented_count': len(nodes_with_commented_deps)
+        'nodes_with_commented_count': len(nodes_with_commented_deps),
+        'nodes_with_pip_commands_count': len(nodes_with_pip_commands)
     }
 
 
@@ -192,7 +204,8 @@ def analyze_wildcard_dependencies(nodes_dict, pattern):
             if 'dependencies' in latest_version and latest_version['dependencies']:
                 for dep in latest_version['dependencies']:
                     dep_str = str(dep).strip()
-                    if not dep_str.startswith('#'):
+                    # Skip commented dependencies and pip commands
+                    if not dep_str.startswith('#') and not dep_str.startswith('--'):
                         dep_lower = dep_str.lower()
                         base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
                         all_base_deps.add(base_name)
@@ -300,6 +313,89 @@ def analyze_specific_dependency(nodes_dict, dep_name):
     }
 
 
+def make_filename_safe(query):
+    """Convert a query string to a filename-safe version."""
+    # Remove &save suffix if present
+    query = query.replace('&save', '').strip()
+    # Replace asterisks with 'wildcard'
+    query = query.replace('*', 'wildcard')
+    # Replace non-alphanumeric characters with underscores
+    safe_name = re.sub(r'[^\w\-_]', '_', query)
+    # Remove multiple underscores
+    safe_name = re.sub(r'_+', '_', safe_name)
+    # Trim underscores from ends
+    return safe_name.strip('_')
+
+
+def save_results_to_file(query, results_text):
+    """Save search results to a timestamped file in the results directory."""
+    # Create results directory if it doesn't exist
+    results_dir = Path('results')
+    results_dir.mkdir(exist_ok=True)
+
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    safe_query = make_filename_safe(query)
+    filename = f"{timestamp}_{safe_query}.txt"
+    filepath = results_dir / filename
+
+    # Write results to file
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(f"Query: {query}\n")
+            f.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("="*60 + "\n\n")
+            f.write(results_text)
+        print(f"\n[Results saved to: {filepath}]")
+        return True
+    except Exception as e:
+        print(f"\n[Error saving results: {e}]")
+        return False
+
+
+def format_dependency_details(result, show_all_nodes=False):
+    """Format detailed dependency information for display and saving."""
+    lines = []
+    lines.append(f"\n{'='*50}")
+    lines.append(f"Dependency: {result['dependency_name']}")
+    lines.append(f"{'='*50}")
+    lines.append(f"Total nodes using this dependency: {result['total_nodes']}")
+
+    if result['commented_count'] > 0:
+        lines.append(f"WARNING: Nodes with COMMENTED (inactive) dependency: {result['commented_count']}")
+
+    if result['total_nodes'] > 0:
+        lines.append(f"\nVersion specifications found:")
+        for version, count in result['sorted_versions']:
+            lines.append(f"  {version:20} - {count} nodes")
+
+        # Sort nodes by downloads (most popular first)
+        sorted_nodes = sorted(result['nodes_using'],
+                            key=lambda x: x.get('downloads', 0),
+                            reverse=True)
+
+        # Show all nodes if requested, otherwise limit to 10
+        nodes_to_show = sorted_nodes if show_all_nodes else sorted_nodes[:10]
+
+        lines.append(f"\nNodes using {result['dependency_name']} ({'all' if show_all_nodes else 'showing first 10 by popularity'}):")
+        for i, node in enumerate(nodes_to_show, 1):
+            lines.append(f"\n  {i}. {node['node_name']} ({node['node_id']})")
+            lines.append(f"     Stars: {node.get('stars', 0):,} | Downloads: {node.get('downloads', 0):,} | Latest: {node.get('latest_version_date', 'N/A')}")
+            lines.append(f"     Spec: {node['dependency_spec']}")
+            lines.append(f"     Repo: {node['repository']}")
+
+        if not show_all_nodes and result['total_nodes'] > 10:
+            lines.append(f"\n  ... and {result['total_nodes'] - 10} more nodes")
+
+    if result['commented_count'] > 0:
+        lines.append(f"\n\nWARNING: Nodes with COMMENTED {result['dependency_name']} (not active):")
+        for i, node in enumerate(result['nodes_with_commented'], 1):
+            lines.append(f"  {i}. {node['node_name']} ({node['node_id']})")
+            lines.append(f"     Commented: {node['commented_spec']}")
+
+    return '\n'.join(lines)
+
+
 def interactive_mode(nodes_dict):
     """
     Interactive chat loop for dependency queries.
@@ -307,9 +403,14 @@ def interactive_mode(nodes_dict):
     print("\n" + "="*60)
     print("INTERACTIVE DEPENDENCY ANALYZER")
     print("="*60)
-    print("\nEnter a dependency name to analyze (or 'quit' to exit)")
-    print("You can also use 'list' to see all unique dependencies")
-    print("or 'top' to see the most common dependencies\n")
+    print("\nEnter a dependency name to analyze (or use /quit to exit)")
+    print("\nCommands:")
+    print("  /list  - Show all unique dependency names")
+    print("  /top   - Show the most common dependencies")
+    print("  /help  - Show this help message")
+    print("  /quit  - Exit interactive mode")
+    print("\nYou can use * as a wildcard (e.g., torch*, *audio*)")
+    print("Add &save to any query to save results to a file (e.g., numpy &save)\n")
 
     # Pre-compile all dependencies for quick lookup
     dep_analysis = compile_dependencies(nodes_dict)
@@ -320,11 +421,23 @@ def interactive_mode(nodes_dict):
         try:
             query = input("\n> ").strip()
 
-            if query.lower() in ['quit', 'exit', 'q']:
+            # Handle exit commands
+            if query.lower() in ['/quit', '/exit', '/q']:
                 print("Exiting interactive mode.")
                 break
 
-            elif query.lower() == 'list':
+            elif query.lower() == '/help':
+                print("\nCommands:")
+                print("  /list  - Show all unique dependency names")
+                print("  /top   - Show the most common dependencies")
+                print("  /help  - Show this help message")
+                print("  /quit  - Exit interactive mode")
+                print("\nSearch modifiers:")
+                print("  * - Wildcard (e.g., torch*, *audio*)")
+                print("  &save - Save results to file (e.g., numpy &save, torch* &save)")
+                print("\nOr type a dependency name directly (e.g., numpy, torch)")
+
+            elif query.lower() == '/list':
                 sorted_deps = sorted(dep_analysis['unique_base_dependencies'], key=str.lower)
                 print(f"\nAll unique package names ({len(sorted_deps)} total):")
                 print("(Versions are grouped together under base package names)")
@@ -333,12 +446,22 @@ def interactive_mode(nodes_dict):
                     row = sorted_deps[i:i+3]
                     print("  " + " | ".join(f"{dep:30}" for dep in row))
 
-            elif query.lower() == 'top':
+            elif query.lower() == '/top':
                 print("\nTop 20 most common dependencies:")
                 for dep, count in dep_analysis['sorted_by_frequency'][:20]:
                     print(f"  {dep:30} - {count} nodes")
 
             elif query:
+                # Check for &save modifier
+                save_results = False
+                original_query = query
+                if '&save' in query.lower():
+                    save_results = True
+                    query = query.lower().replace('&save', '').strip()
+
+                # Capture output for saving if needed
+                output_lines = []
+
                 # Check if query contains wildcard
                 if '*' in query:
                     print(f"\nSearching for dependencies matching pattern: {query}")
@@ -350,25 +473,81 @@ def interactive_mode(nodes_dict):
                                               key=lambda x: x[1]['total_nodes'],
                                               reverse=True)
 
-                        print(f"\nFound {len(wildcard_results)} dependencies matching '{query}':")
-                        print("="*60)
+                        # Build output for display and saving
+                        output_lines = []
+                        output_lines.append(f"\nFound {len(wildcard_results)} dependencies matching '{query}':")
+                        output_lines.append("="*60)
 
                         total_nodes = sum(info['total_nodes'] for _, info in wildcard_results.items())
-                        print(f"Total nodes using any matching dependency: {total_nodes}")
+                        output_lines.append(f"Total nodes using any matching dependency: {total_nodes}")
 
+                        # Format each dependency's details
                         for dep_name, dep_info in sorted_results:
-                            print(f"\n{dep_name}: {dep_info['total_nodes']} nodes")
-                            if dep_info['commented_count'] > 0:
-                                print(f"  WARNING: {dep_info['commented_count']} nodes have it commented")
+                            # For display, show limited nodes; for save, show all
+                            if save_results:
+                                output_lines.append(format_dependency_details(dep_info, show_all_nodes=True))
+                            else:
+                                # Create limited version for display
+                                output_lines.append(f"\n{'='*50}")
+                                output_lines.append(f"Dependency: {dep_name}")
+                                output_lines.append(f"{'='*50}")
+                                output_lines.append(f"Total nodes using this dependency: {dep_info['total_nodes']}")
 
-                            # Show version distribution for this dependency
-                            if dep_info['sorted_versions'][:3]:
-                                print(f"  Top versions:")
-                                for version, count in dep_info['sorted_versions'][:3]:
-                                    print(f"    {version:20} - {count} nodes")
+                                if dep_info['commented_count'] > 0:
+                                    output_lines.append(f"WARNING: Nodes with COMMENTED (inactive) dependency: {dep_info['commented_count']}")
 
-                        print("\n" + "="*60)
-                        print("To see details for a specific dependency, type its full name.")
+                                if dep_info['total_nodes'] > 0:
+                                    # Show version distribution
+                                    if len(dep_info['sorted_versions']) > 0:
+                                        output_lines.append(f"\nVersion specifications found:")
+                                        # Show up to 5 versions for wildcard results
+                                        for version, count in dep_info['sorted_versions'][:5]:
+                                            output_lines.append(f"  {version:20} - {count} nodes")
+                                        if len(dep_info['sorted_versions']) > 5:
+                                            output_lines.append(f"  ... and {len(dep_info['sorted_versions']) - 5} more versions")
+
+                                    # Sort nodes by downloads (most popular first)
+                                    sorted_nodes = sorted(dep_info['nodes_using'],
+                                                        key=lambda x: x.get('downloads', 0),
+                                                        reverse=True)
+
+                                    # Show top 5 nodes for wildcard results
+                                    output_lines.append(f"\nTop nodes using {dep_name} (showing up to 5 by popularity):")
+                                    for i, node in enumerate(sorted_nodes[:5], 1):
+                                        output_lines.append(f"\n  {i}. {node['node_name']} ({node['node_id']})")
+                                        output_lines.append(f"     Stars: {node.get('stars', 0):,} | Downloads: {node.get('downloads', 0):,} | Latest: {node.get('latest_version_date', 'N/A')}")
+                                        output_lines.append(f"     Spec: {node['dependency_spec']}")
+
+                                    if dep_info['total_nodes'] > 5:
+                                        output_lines.append(f"\n  ... and {dep_info['total_nodes'] - 5} more nodes using {dep_name}")
+
+                                if dep_info['commented_count'] > 0 and dep_info['nodes_with_commented']:
+                                    output_lines.append(f"\n  WARNING: Nodes with COMMENTED {dep_name}:")
+                                    for i, node in enumerate(dep_info['nodes_with_commented'][:2], 1):
+                                        output_lines.append(f"    {i}. {node['node_name']} ({node['node_id']})")
+                                    if dep_info['commented_count'] > 2:
+                                        output_lines.append(f"    ... and {dep_info['commented_count'] - 2} more with commented {dep_name}")
+
+                        output_lines.append("\n" + "="*60)
+                        output_lines.append("To see details for a specific dependency, type its full name.")
+
+                        # Print output
+                        output_text = '\n'.join(output_lines)
+                        print(output_text)
+
+                        # Save if requested
+                        if save_results:
+                            # For saved file, regenerate with all nodes shown
+                            save_lines = []
+                            save_lines.append(f"Found {len(wildcard_results)} dependencies matching '{query}':")
+                            save_lines.append("="*60)
+                            save_lines.append(f"Total nodes using any matching dependency: {total_nodes}")
+
+                            for dep_name, dep_info in sorted_results:
+                                save_lines.append(format_dependency_details(dep_info, show_all_nodes=True))
+
+                            save_text = '\n'.join(save_lines)
+                            save_results_to_file(original_query, save_text)
                     else:
                         print(f"\nNo dependencies found matching pattern '{query}'")
 
@@ -385,41 +564,15 @@ def interactive_mode(nodes_dict):
                     if exact_match:
                         result = analyze_specific_dependency(nodes_dict, exact_match)
 
-                        print(f"\n{'='*50}")
-                        print(f"Dependency: {result['dependency_name']}")
-                        print(f"{'='*50}")
-                        print(f"Total nodes using this dependency: {result['total_nodes']}")
+                        # Format output for display
+                        output_text = format_dependency_details(result, show_all_nodes=False)
+                        print(output_text)
 
-                        if result['commented_count'] > 0:
-                            print(f"WARNING: Nodes with COMMENTED (inactive) dependency: {result['commented_count']}")
-
-                        if result['total_nodes'] > 0:
-                            print(f"\nVersion specifications found:")
-                            for version, count in result['sorted_versions']:
-                                print(f"  {version:20} - {count} nodes")
-
-                            # Sort nodes by downloads (most popular first)
-                            sorted_nodes = sorted(result['nodes_using'],
-                                                key=lambda x: x.get('downloads', 0),
-                                                reverse=True)
-
-                            print(f"\nNodes using {result['dependency_name']} (showing first 10 by popularity):")
-                            for i, node in enumerate(sorted_nodes[:10], 1):
-                                print(f"\n  {i}. {node['node_name']} ({node['node_id']})")
-                                print(f"     Stars: {node.get('stars', 0):,} | Downloads: {node.get('downloads', 0):,} | Latest: {node.get('latest_version_date', 'N/A')}")
-                                print(f"     Spec: {node['dependency_spec']}")
-                                print(f"     Repo: {node['repository']}")
-
-                            if result['total_nodes'] > 10:
-                                print(f"\n  ... and {result['total_nodes'] - 10} more nodes")
-
-                        if result['commented_count'] > 0:
-                            print(f"\n\nWARNING: Nodes with COMMENTED {result['dependency_name']} (not active):")
-                            for i, node in enumerate(result['nodes_with_commented'][:5], 1):
-                                print(f"  {i}. {node['node_name']} ({node['node_id']})")
-                                print(f"     Commented: {node['commented_spec']}")
-                            if result['commented_count'] > 5:
-                                print(f"  ... and {result['commented_count'] - 5} more nodes with commented {result['dependency_name']}")
+                        # Save if requested
+                        if save_results:
+                            # Generate full output with all nodes for saved file
+                            full_output = format_dependency_details(result, show_all_nodes=True)
+                            save_results_to_file(original_query, full_output)
                     else:
                         # Try to find dependencies starting with the search string
                         starts_with_matches = [dep for dep_lower, dep in all_deps_lower.items()
@@ -513,6 +666,8 @@ def main():
         print(f"Nodes without active dependencies: {dep_analysis['nodes_without_deps_count']}")
         if dep_analysis['nodes_with_commented_count'] > 0:
             print(f"WARNING: Nodes with COMMENTED dependencies: {dep_analysis['nodes_with_commented_count']}")
+        if dep_analysis['nodes_with_pip_commands_count'] > 0:
+            print(f"INFO: Nodes with pip commands (--): {dep_analysis['nodes_with_pip_commands_count']}")
         print(f"\nTotal active dependency references: {dep_analysis['total_dependencies']}")
         print(f"Unique active packages (grouping versions): {dep_analysis['unique_count']}")
         print(f"Unique dependency specifications: {dep_analysis['unique_raw_count']}")
@@ -551,6 +706,22 @@ def main():
                 print(f"    Commented deps: {', '.join(node_info['commented_deps'][:3])}")
                 if len(node_info['commented_deps']) > 3:
                     print(f"      ... and {len(node_info['commented_deps']) - 3} more commented")
+
+        if dep_analysis['nodes_with_pip_commands_count'] > 0:
+            print(f"\n\nINFO: {dep_analysis['nodes_with_pip_commands_count']} nodes use pip command flags")
+            print("  These are special pip installation flags (starting with --)")
+            print("  Common pip commands found:")
+            for cmd, count in dep_analysis['sorted_pip_commands'][:5]:
+                print(f"    {cmd}: {count} nodes")
+            if len(dep_analysis['sorted_pip_commands']) > 5:
+                print(f"    ... and {len(dep_analysis['sorted_pip_commands']) - 5} more unique pip commands")
+
+            print(f"\n  Example nodes with pip commands:")
+            for node_info in dep_analysis['nodes_with_pip_commands'][:3]:
+                print(f"\n    Node: {node_info['name']} ({node_info['id']})")
+                print(f"    Pip commands: {', '.join(node_info['pip_commands'][:2])}")
+                if len(node_info['pip_commands']) > 2:
+                    print(f"      ... and {len(node_info['pip_commands']) - 2} more commands")
 
 
 if __name__ == "__main__":
