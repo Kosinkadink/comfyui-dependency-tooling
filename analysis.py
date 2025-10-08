@@ -433,6 +433,7 @@ def interactive_mode(nodes_dict):
     print("  /list  - Show all unique dependency names (use &dupes for version conflicts)")
     print("  /top   - Show the most common dependencies")
     print("  /nodes - Show details about nodes (sorted by downloads)")
+    print("  /summary - Show overall dependency analysis summary")
     print("  /help  - Show this help message")
     print("  /quit  - Exit interactive mode")
     print("\nSearch modifiers:")
@@ -457,12 +458,17 @@ def interactive_mode(nodes_dict):
                 print("Exiting interactive mode.")
                 break
 
+            elif query.lower() == '/summary':
+                # Display the default summary
+                display_summary(nodes_dict)
+
             elif query.lower() == '/help':
                 print("\nCommands:")
                 print("  /list  - Show all unique dependency names")
                 print("         Use &dupes to show only deps with version conflicts")
                 print("  /top   - Show the most common dependencies")
                 print("  /nodes - Show details about nodes (sorted by downloads)")
+                print("  /summary - Show overall dependency analysis summary")
                 print("  /help  - Show this help message")
                 print("  /quit  - Exit interactive mode")
                 print("\nSearch modifiers:")
@@ -510,27 +516,34 @@ def interactive_mode(nodes_dict):
                 filtered_dep_analysis = compile_dependencies(working_nodes)
 
                 if show_dupes:
-                    # Show only dependencies with multiple versions
+                    # Separate dependencies into duplicates and non-duplicates
                     dupes_only = []
+                    non_dupes = []
+
                     for dep_name, versions in filtered_dep_analysis['dependency_versions'].items():
+                        count = filtered_dep_analysis['dependency_count'].get(dep_name, 0)
                         if len(versions) > 1:
-                            count = filtered_dep_analysis['dependency_count'].get(dep_name, 0)
                             dupes_only.append((dep_name, count, versions))
+                        else:
+                            # Non-duplicates have only one version
+                            non_dupes.append((dep_name, count, list(versions)[0] if versions else '*'))
 
                     # Sort by count (most used first), then alphabetically
                     dupes_only.sort(key=lambda x: (-x[1], x[0].lower()))
+                    non_dupes.sort(key=lambda x: (-x[1], x[0].lower()))
 
                     output_lines = []
+
+                    # Header for duplicates section
                     if top_n:
                         if top_n > 0:
-                            output_lines.append(f"\nDependencies with multiple versions in top {top_n} nodes ({len(dupes_only)} total):")
+                            output_lines.append(f"\nDEPENDENCIES WITH MULTIPLE VERSIONS in top {top_n} nodes ({len(dupes_only)} total):")
                         else:
-                            output_lines.append(f"\nDependencies with multiple versions in bottom {abs(top_n)} nodes ({len(dupes_only)} total):")
+                            output_lines.append(f"\nDEPENDENCIES WITH MULTIPLE VERSIONS in bottom {abs(top_n)} nodes ({len(dupes_only)} total):")
                     else:
-                        output_lines.append(f"\nDependencies with multiple versions ({len(dupes_only)} total):")
+                        output_lines.append(f"\nDEPENDENCIES WITH MULTIPLE VERSIONS ({len(dupes_only)} total):")
 
-                    output_lines.append("(Shows packages that have different version specifications across nodes)")
-                    output_lines.append("")
+                    output_lines.append("="*60)
 
                     for dep_name, count, versions in dupes_only:
                         output_lines.append(f"\n{dep_name} ({count} nodes total, {len(versions)} different specs):")
@@ -548,6 +561,21 @@ def interactive_mode(nodes_dict):
                         version_counts.sort(key=lambda x: -x[1])
                         for v, v_count in version_counts:  # Show all versions
                             output_lines.append(f"  {v:40} ({v_count} nodes)")
+
+                    # Add non-duplicates section
+                    if non_dupes:
+                        output_lines.append("")
+                        if top_n:
+                            if top_n > 0:
+                                output_lines.append(f"\nDEPENDENCIES WITH SINGLE VERSION in top {top_n} nodes ({len(non_dupes)} total):")
+                            else:
+                                output_lines.append(f"\nDEPENDENCIES WITH SINGLE VERSION in bottom {abs(top_n)} nodes ({len(non_dupes)} total):")
+                        else:
+                            output_lines.append(f"\nDEPENDENCIES WITH SINGLE VERSION ({len(non_dupes)} total):")
+                        output_lines.append("="*60)
+
+                        for dep_name, count, version_spec in non_dupes:
+                            output_lines.append(f"{dep_name:40} ({count:3} nodes) - {version_spec}")
 
                     # Print output
                     output_text = '\n'.join(output_lines)
@@ -992,6 +1020,96 @@ def interactive_mode(nodes_dict):
             print(f"Error: {e}")
 
 
+def display_summary(nodes_dict):
+    """
+    Display the summary of nodes and dependencies.
+    This is the default output when not using --ask.
+    """
+    print(f"\nFirst 3 node IDs in the dictionary:")
+    for i, node_id in enumerate(list(nodes_dict.keys())[:3]):
+        print(f"  - {node_id}")
+
+    print(f"\nExample node data for first ID:")
+    first_id = list(nodes_dict.keys())[0]
+    first_node = nodes_dict[first_id]
+    print(f"ID: {first_id}")
+    print(f"Name: {first_node.get('name', 'N/A')}")
+    print(f"Repository: {first_node.get('repository', 'N/A')}")
+    print(f"Description: {first_node.get('description', 'N/A')[:100]}...")
+
+    print("\n" + "="*60)
+    print("DEPENDENCY ANALYSIS")
+    print("="*60)
+
+    dep_analysis = compile_dependencies(nodes_dict)
+
+    print(f"\nTotal nodes analyzed: {len(nodes_dict)}")
+    print(f"Nodes with active dependencies: {dep_analysis['nodes_with_deps_count']}")
+    print(f"Nodes without active dependencies: {dep_analysis['nodes_without_deps_count']}")
+    if dep_analysis['nodes_with_commented_count'] > 0:
+        print(f"WARNING: Nodes with COMMENTED dependencies: {dep_analysis['nodes_with_commented_count']}")
+    if dep_analysis['nodes_with_pip_commands_count'] > 0:
+        print(f"INFO: Nodes with pip commands (--): {dep_analysis['nodes_with_pip_commands_count']}")
+    print(f"\nTotal active dependency references: {dep_analysis['total_dependencies']}")
+    print(f"Unique active packages (grouping versions): {dep_analysis['unique_count']}")
+    print(f"Unique dependency specifications: {dep_analysis['unique_raw_count']}")
+    if len(dep_analysis['unique_commented_dependencies']) > 0:
+        print(f"Unique commented dependencies: {len(dep_analysis['unique_commented_dependencies'])}")
+
+    print(f"\nTop 10 most common dependencies:")
+    for dep, count in dep_analysis['sorted_by_frequency'][:10]:
+        print(f"  - {dep}: {count} nodes")
+
+    # Calculate ranks for display
+    rank_map = calculate_node_ranks(nodes_dict)
+
+    print(f"\nExample nodes with dependencies (first 3):")
+    for node_info in dep_analysis['nodes_with_dependencies'][:3]:
+        # Get full node data for additional info
+        node_data = nodes_dict.get(node_info['id'], {})
+        stars = node_data.get('github_stars', 0)
+        downloads = node_data.get('downloads', 0)
+        rank = rank_map.get(node_info['id'], 'N/A')
+        latest_version_info = node_data.get('latest_version', {})
+        latest_date = 'N/A'
+        if latest_version_info and 'createdAt' in latest_version_info:
+            date_str = latest_version_info['createdAt']
+            latest_date = date_str[:10] if date_str else 'N/A'
+
+        print(f"\n  Node: {node_info['name']} ({node_info['id']})")
+        print(f"  Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Latest: {latest_date}")
+        print(f"  Dependencies: {', '.join(node_info['dependencies'][:5])}")
+        if len(node_info['dependencies']) > 5:
+            print(f"    ... and {len(node_info['dependencies']) - 5} more")
+
+    if dep_analysis['nodes_with_commented_count'] > 0:
+        print(f"\n\nWARNING: {dep_analysis['nodes_with_commented_count']} nodes have commented dependencies")
+        print("  Commented dependencies are included in their dependency lists but prefixed with #")
+        print("  These dependencies are NOT active and should not be installed.")
+        print(f"\n  Example nodes with commented dependencies:")
+        for node_info in dep_analysis['nodes_with_commented_dependencies'][:3]:
+            print(f"\n    Node: {node_info['name']} ({node_info['id']})")
+            print(f"    Commented deps: {', '.join(node_info['commented_deps'][:3])}")
+            if len(node_info['commented_deps']) > 3:
+                print(f"      ... and {len(node_info['commented_deps']) - 3} more commented")
+
+    if dep_analysis['nodes_with_pip_commands_count'] > 0:
+        print(f"\n\nINFO: {dep_analysis['nodes_with_pip_commands_count']} nodes use pip command flags")
+        print("  These are special pip installation flags (starting with --)")
+        print("  Common pip commands found:")
+        for cmd, count in dep_analysis['sorted_pip_commands'][:5]:
+            print(f"    {cmd}: {count} nodes")
+        if len(dep_analysis['sorted_pip_commands']) > 5:
+            print(f"    ... and {len(dep_analysis['sorted_pip_commands']) - 5} more unique pip commands")
+
+        print(f"\n  Example nodes with pip commands:")
+        for node_info in dep_analysis['nodes_with_pip_commands'][:3]:
+            print(f"\n    Node: {node_info['name']} ({node_info['id']})")
+            print(f"    Pip commands: {', '.join(node_info['pip_commands'][:2])}")
+            if len(node_info['pip_commands']) > 2:
+                print(f"      ... and {len(node_info['pip_commands']) - 2} more commands")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze ComfyUI node dependencies')
     parser.add_argument('--ask', action='store_true',
@@ -1008,89 +1126,7 @@ def main():
         interactive_mode(nodes_dict)
     else:
         # Original behavior - show summary
-        print(f"\nFirst 3 node IDs in the dictionary:")
-        for i, node_id in enumerate(list(nodes_dict.keys())[:3]):
-            print(f"  - {node_id}")
-
-        print(f"\nExample node data for first ID:")
-        first_id = list(nodes_dict.keys())[0]
-        first_node = nodes_dict[first_id]
-        print(f"ID: {first_id}")
-        print(f"Name: {first_node.get('name', 'N/A')}")
-        print(f"Repository: {first_node.get('repository', 'N/A')}")
-        print(f"Description: {first_node.get('description', 'N/A')[:100]}...")
-
-        print("\n" + "="*60)
-        print("DEPENDENCY ANALYSIS")
-        print("="*60)
-
-        dep_analysis = compile_dependencies(nodes_dict)
-
-        print(f"\nTotal nodes analyzed: {len(nodes_dict)}")
-        print(f"Nodes with active dependencies: {dep_analysis['nodes_with_deps_count']}")
-        print(f"Nodes without active dependencies: {dep_analysis['nodes_without_deps_count']}")
-        if dep_analysis['nodes_with_commented_count'] > 0:
-            print(f"WARNING: Nodes with COMMENTED dependencies: {dep_analysis['nodes_with_commented_count']}")
-        if dep_analysis['nodes_with_pip_commands_count'] > 0:
-            print(f"INFO: Nodes with pip commands (--): {dep_analysis['nodes_with_pip_commands_count']}")
-        print(f"\nTotal active dependency references: {dep_analysis['total_dependencies']}")
-        print(f"Unique active packages (grouping versions): {dep_analysis['unique_count']}")
-        print(f"Unique dependency specifications: {dep_analysis['unique_raw_count']}")
-        if len(dep_analysis['unique_commented_dependencies']) > 0:
-            print(f"Unique commented dependencies: {len(dep_analysis['unique_commented_dependencies'])}")
-
-        print(f"\nTop 10 most common dependencies:")
-        for dep, count in dep_analysis['sorted_by_frequency'][:10]:
-            print(f"  - {dep}: {count} nodes")
-
-        # Calculate ranks for display
-        rank_map = calculate_node_ranks(nodes_dict)
-
-        print(f"\nExample nodes with dependencies (first 3):")
-        for node_info in dep_analysis['nodes_with_dependencies'][:3]:
-            # Get full node data for additional info
-            node_data = nodes_dict.get(node_info['id'], {})
-            stars = node_data.get('github_stars', 0)
-            downloads = node_data.get('downloads', 0)
-            rank = rank_map.get(node_info['id'], 'N/A')
-            latest_version_info = node_data.get('latest_version', {})
-            latest_date = 'N/A'
-            if latest_version_info and 'createdAt' in latest_version_info:
-                date_str = latest_version_info['createdAt']
-                latest_date = date_str[:10] if date_str else 'N/A'
-
-            print(f"\n  Node: {node_info['name']} ({node_info['id']})")
-            print(f"  Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Latest: {latest_date}")
-            print(f"  Dependencies: {', '.join(node_info['dependencies'][:5])}")
-            if len(node_info['dependencies']) > 5:
-                print(f"    ... and {len(node_info['dependencies']) - 5} more")
-
-        if dep_analysis['nodes_with_commented_count'] > 0:
-            print(f"\n\nWARNING: {dep_analysis['nodes_with_commented_count']} nodes have commented dependencies")
-            print("  Commented dependencies are included in their dependency lists but prefixed with #")
-            print("  These dependencies are NOT active and should not be installed.")
-            print(f"\n  Example nodes with commented dependencies:")
-            for node_info in dep_analysis['nodes_with_commented_dependencies'][:3]:
-                print(f"\n    Node: {node_info['name']} ({node_info['id']})")
-                print(f"    Commented deps: {', '.join(node_info['commented_deps'][:3])}")
-                if len(node_info['commented_deps']) > 3:
-                    print(f"      ... and {len(node_info['commented_deps']) - 3} more commented")
-
-        if dep_analysis['nodes_with_pip_commands_count'] > 0:
-            print(f"\n\nINFO: {dep_analysis['nodes_with_pip_commands_count']} nodes use pip command flags")
-            print("  These are special pip installation flags (starting with --)")
-            print("  Common pip commands found:")
-            for cmd, count in dep_analysis['sorted_pip_commands'][:5]:
-                print(f"    {cmd}: {count} nodes")
-            if len(dep_analysis['sorted_pip_commands']) > 5:
-                print(f"    ... and {len(dep_analysis['sorted_pip_commands']) - 5} more unique pip commands")
-
-            print(f"\n  Example nodes with pip commands:")
-            for node_info in dep_analysis['nodes_with_pip_commands'][:3]:
-                print(f"\n    Node: {node_info['name']} ({node_info['id']})")
-                print(f"    Pip commands: {', '.join(node_info['pip_commands'][:2])}")
-                if len(node_info['pip_commands']) > 2:
-                    print(f"      ... and {len(node_info['pip_commands']) - 2} more commands")
+        display_summary(nodes_dict)
 
 
 if __name__ == "__main__":
