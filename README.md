@@ -158,6 +158,23 @@ Show dependencies with multiple version specifications, helping identify version
 > /list &dupes &top 100
 ```
 
+### `&nodes`
+Filter results to only include specific nodes by their IDs.
+
+**Comma-separated list:**
+```bash
+> numpy &nodes comfyui-kjnodes,rgthree-comfy
+> /top &nodes node1,node2,node3
+```
+
+**From a file:**
+```bash
+> numpy &nodes file:nodelist.txt
+> /list &nodes file:path/to/nodes.txt &dupes
+```
+
+The file should contain one node ID per line.
+
 ## Dependency Searches
 
 Search for specific dependencies by typing their name directly.
@@ -206,6 +223,11 @@ python analysis.py -e "//list &dupes &top 50"
 python analysis.py -e "//summary"
 ```
 
+### Analyze dependencies for specific nodes from a file
+```bash
+python analysis.py -e "//list &nodes file:my_nodes.txt &dupes"
+```
+
 ### Interactive session workflow
 ```bash
 $ python analysis.py
@@ -215,6 +237,7 @@ $ python analysis.py
 > torch* &all        # See all torch-related packages
 > /list &dupes       # Check for version conflicts
 > /nodes &top 10     # See top 10 nodes by downloads
+> numpy &nodes comfyui-kjnodes,rgthree-comfy  # Check numpy in specific nodes
 > /quit              # Exit
 ```
 
@@ -278,4 +301,10 @@ Different versions of the same package (e.g., `numpy`, `numpy>=1.20`, `numpy==1.
 5. **Save important searches** for later reference:
    ```bash
    > torch &all &save
+   ```
+
+6. **Analyze specific node sets** to focus on particular packages:
+   ```bash
+   > /list &nodes file:production_nodes.txt &dupes
+   > numpy &nodes comfyui-kjnodes,comfyui-easy-use
    ```

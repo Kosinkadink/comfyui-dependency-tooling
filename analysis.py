@@ -421,6 +421,60 @@ def format_dependency_details(result, show_all_nodes=False):
     return '\n'.join(lines)
 
 
+def parse_nodes_modifier(query, nodes_dict):
+    """
+    Parse the &nodes modifier to filter nodes by specific IDs.
+
+    Args:
+        query: Query string containing the modifier
+        nodes_dict: Full dictionary of nodes
+
+    Returns:
+        Filtered nodes dictionary or original if no modifier
+    """
+    import re
+
+    # Check if &nodes modifier is present
+    nodes_match = re.search(r'&nodes\s+([^&]+)', query, re.IGNORECASE)
+    if not nodes_match:
+        return nodes_dict
+
+    nodes_spec = nodes_match.group(1).strip()
+
+    # Check if it's a file specification
+    if nodes_spec.startswith('file:'):
+        filepath = nodes_spec[5:].strip()
+        try:
+            with open(filepath, 'r') as f:
+                node_ids = [line.strip() for line in f if line.strip()]
+            print(f"\n[Loaded {len(node_ids)} node IDs from {filepath}]")
+        except FileNotFoundError:
+            print(f"\n[Error: File not found: {filepath}]")
+            return nodes_dict
+        except Exception as e:
+            print(f"\n[Error reading file: {e}]")
+            return nodes_dict
+    else:
+        # Parse comma-separated list
+        node_ids = [id.strip() for id in nodes_spec.split(',') if id.strip()]
+        print(f"\n[Filtering to {len(node_ids)} specific nodes]")
+
+    # Filter nodes dictionary
+    filtered_nodes = {}
+    missing_ids = []
+
+    for node_id in node_ids:
+        if node_id in nodes_dict:
+            filtered_nodes[node_id] = nodes_dict[node_id]
+        else:
+            missing_ids.append(node_id)
+
+    if missing_ids:
+        print(f"[Warning: {len(missing_ids)} node IDs not found: {', '.join(missing_ids[:5])}{'...' if len(missing_ids) > 5 else ''}]")
+
+    return filtered_nodes if filtered_nodes else nodes_dict
+
+
 def execute_command(nodes_dict, command):
     """
     Execute a single command from the command line.
@@ -468,6 +522,9 @@ def interactive_mode(nodes_dict):
     print("  &all - Show all results without limits")
     print("  &top N - Only analyze top N nodes by downloads (e.g., &top 100)")
     print("           Use negative for bottom N (e.g., &top -10 for least downloaded)")
+    print("  &nodes - Filter by specific node IDs")
+    print("           Comma-separated: &nodes id1,id2,id3")
+    print("           From file: &nodes file:path/to/nodelist.txt")
     print("  Combine modifiers: numpy &top 50 &save\n")
 
     # Pre-compile all dependencies for quick lookup
@@ -503,6 +560,9 @@ def interactive_mode(nodes_dict):
                 print("  &all - Show all results without limits")
                 print("  &top N - Only analyze top N nodes by downloads")
                 print("         Use negative for bottom N (e.g., &top -10)")
+                print("  &nodes - Filter by specific node IDs")
+                print("         Comma-separated: &nodes id1,id2")
+                print("         From file: &nodes file:nodelist.txt")
                 print("  Combine: numpy &top 50 &save")
                 print("\nOr type a dependency name directly (e.g., numpy, torch)")
 
@@ -513,6 +573,9 @@ def interactive_mode(nodes_dict):
                 show_dupes = False
                 save_results = False
                 original_query = query
+
+                # Parse &nodes modifier first to filter by specific nodes
+                working_nodes = parse_nodes_modifier(query, working_nodes)
 
                 # Parse &dupes modifier
                 if '&dupes' in query.lower():
@@ -529,7 +592,7 @@ def interactive_mode(nodes_dict):
                     if top_match:
                         top_n = int(top_match.group(1))
                         # Filter to top N nodes by downloads
-                        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+                        sorted_nodes = sorted(working_nodes.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
                         if top_n > 0:
                             working_nodes = dict(sorted_nodes[:top_n])
                             print(f"\n[Filtering to top {top_n} nodes by downloads]")
@@ -657,6 +720,9 @@ def interactive_mode(nodes_dict):
                 working_nodes = nodes_dict
                 top_n = None
 
+                # Parse &nodes modifier first to filter by specific nodes
+                working_nodes = parse_nodes_modifier(query, working_nodes)
+
                 # Parse &top modifier if present
                 if '&top' in query.lower():
                     import re
@@ -664,7 +730,7 @@ def interactive_mode(nodes_dict):
                     if top_match:
                         top_n = int(top_match.group(1))
                         # Filter to top N nodes by downloads
-                        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+                        sorted_nodes = sorted(working_nodes.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
                         if top_n > 0:
                             working_nodes = dict(sorted_nodes[:top_n])
                             print(f"\n[Filtering to top {top_n} nodes by downloads]")
@@ -694,6 +760,9 @@ def interactive_mode(nodes_dict):
                 working_nodes = nodes_dict
                 original_query = query
 
+                # Parse &nodes modifier first to filter by specific nodes
+                working_nodes = parse_nodes_modifier(query, working_nodes)
+
                 # Parse modifiers
                 if '&save' in query.lower():
                     save_results = True
@@ -707,7 +776,7 @@ def interactive_mode(nodes_dict):
                     if top_match:
                         top_n = int(top_match.group(1))
                         # Filter to top N nodes by downloads
-                        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+                        sorted_nodes = sorted(working_nodes.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
                         if top_n > 0:
                             working_nodes = dict(sorted_nodes[:top_n])
                             print(f"\n[Filtering to top {top_n} nodes by downloads]")
@@ -843,6 +912,14 @@ def interactive_mode(nodes_dict):
                 # Parse modifiers (case-insensitive)
                 query_lower = query.lower()
 
+                # Parse &nodes modifier first and remove it from query
+                if '&nodes' in query_lower:
+                    working_nodes = parse_nodes_modifier(original_query, working_nodes)
+                    # Remove &nodes specification from query
+                    import re
+                    query = re.sub(r'&nodes\s+[^&]+', '', query, flags=re.IGNORECASE).strip()
+                    query_lower = query.lower()
+
                 # Parse &top N modifier
                 if '&top' in query_lower:
                     import re
@@ -854,7 +931,7 @@ def interactive_mode(nodes_dict):
                         query_lower = query.lower()
 
                         # Filter to top N nodes by downloads
-                        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+                        sorted_nodes = sorted(working_nodes.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
                         if top_n > 0:
                             working_nodes = dict(sorted_nodes[:top_n])
                             print(f"\n[Filtering to top {top_n} nodes by downloads]")
