@@ -617,6 +617,8 @@ def print_help():
     print("  /graph - Create cumulative dependencies visualization")
     print("  /graph downloads - Create total downloads visualization (linear scale)")
     print("  /graph downloads log - Create total downloads visualization (log scale)")
+    print("  /graph downloads indicators - Show with percentage milestones (50%, 75%, 90%, 99%)")
+    print("  /graph downloads log indicators - Log scale with percentage milestones")
     print("  /summary - Show overall dependency analysis summary")
     print("  /help  - Show this help message")
     print("  /quit  - Exit interactive mode")
@@ -717,9 +719,10 @@ def interactive_mode(nodes_dict):
                 working_nodes = nodes_dict
                 original_query = query
 
-                # Check if it's a downloads graph and check for log scale
+                # Check if it's a downloads graph and check for log scale and indicators
                 graph_type = 'dependencies'
                 use_log_scale = False
+                show_indicators = False
                 query_words = query.lower().split()
 
                 if 'downloads' in query_words:
@@ -727,6 +730,9 @@ def interactive_mode(nodes_dict):
                     # Check for log scale option
                     if 'log' in query_words:
                         use_log_scale = True
+                    # Check for indicators option
+                    if 'indicators' in query_words:
+                        show_indicators = True
 
                 # Parse &nodes modifier first to filter by specific nodes
                 working_nodes = parse_nodes_modifier(query, working_nodes)
@@ -753,7 +759,7 @@ def interactive_mode(nodes_dict):
 
                 # Create the appropriate graph type
                 if graph_type == 'downloads':
-                    create_downloads_graph(working_nodes, save_to_file=save_results, query_desc=original_query, log_scale=use_log_scale)
+                    create_downloads_graph(working_nodes, save_to_file=save_results, query_desc=original_query, log_scale=use_log_scale, show_indicators=show_indicators)
                 else:
                     create_cumulative_graph(working_nodes, save_to_file=save_results, query_desc=original_query)
 

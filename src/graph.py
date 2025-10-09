@@ -200,7 +200,7 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph")
         return False
 
 
-def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False):
+def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False):
     """
     Create and display a total downloads graph using plotly.
 
@@ -209,6 +209,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         save_to_file: Whether to save the graph to a file
         query_desc: Query description for file naming and title
         log_scale: Whether to use logarithmic scale for y-axis
+        show_indicators: Whether to show percentage milestone indicators
 
     Returns:
         True if successful, False otherwise
@@ -226,11 +227,44 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         node_ranks = []
         downloads = []
         node_names = []
+        node_ids = []
+        dep_counts = []
+        cumulative_downloads = []
+
+        total_downloads = sum(node[1].get('downloads', 0) for node in sorted_nodes)
+        running_total = 0
 
         for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
             node_ranks.append(i)
-            downloads.append(node_data.get('downloads', 0))
+            download_count = node_data.get('downloads', 0)
+            downloads.append(download_count)
+            running_total += download_count
+            cumulative_downloads.append(running_total)
             node_names.append(node_data.get('name', node_id))  # Use node_id as fallback if name is missing
+            node_ids.append(node_id)
+
+            # Count dependencies
+            dep_count = 0
+            if 'latest_version' in node_data and node_data['latest_version']:
+                if 'dependencies' in node_data['latest_version']:
+                    deps = node_data['latest_version']['dependencies']
+                    if deps and isinstance(deps, list):
+                        dep_count = len(deps)
+            dep_counts.append(dep_count)
+
+        # Calculate percentage milestones
+        milestones = {
+            50: None,
+            75: None,
+            90: None,
+            99: None
+        }
+
+        for i, cum_downloads in enumerate(cumulative_downloads):
+            percentage = (cum_downloads / total_downloads * 100) if total_downloads > 0 else 0
+            for milestone in milestones:
+                if milestones[milestone] is None and percentage >= milestone:
+                    milestones[milestone] = i
 
         # Create the figure
         fig = go.Figure()
@@ -246,11 +280,15 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 showscale=True,
                 colorbar=dict(title='Downloads')
             ),
+            text=node_names,  # Show node names on the bars
+            textposition='auto',
+            customdata=list(zip(node_ids, dep_counts)),
             hovertemplate='<b>Rank #%{x}</b><br>' +
                          'Downloads: %{y:,.0f}<br>' +
-                         '%{text}<br>' +
-                         '<extra></extra>',
-            text=node_names
+                         'Name: %{text}<br>' +
+                         'ID: %{customdata[0]}<br>' +
+                         'Dependencies: %{customdata[1]}<br>' +
+                         '<extra></extra>'
         ))
 
         # Build title based on query
@@ -284,6 +322,39 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
 
         fig.update_layout(**layout_params)
 
+        # Add percentage milestone annotations if requested
+        if show_indicators:
+            for percentage, node_index in milestones.items():
+                if node_index is not None and node_index < len(node_ranks):
+                    # Add vertical line at milestone
+                    fig.add_shape(
+                        type="line",
+                        x0=node_ranks[node_index], y0=0,
+                        x1=node_ranks[node_index], y1=downloads[node_index],
+                        line=dict(
+                            color="red",
+                            width=2,
+                            dash="dash"
+                        )
+                    )
+
+                    # Add annotation
+                    fig.add_annotation(
+                        x=node_ranks[node_index],
+                        y=downloads[node_index],
+                        text=f"{percentage}% of downloads<br>Rank #{node_ranks[node_index]}",
+                        showarrow=True,
+                        arrowhead=2,
+                        arrowsize=1,
+                        arrowwidth=2,
+                        arrowcolor="red",
+                        ax=30,
+                        ay=-40,
+                        bgcolor="white",
+                        bordercolor="red",
+                        borderwidth=1
+                    )
+
         # Add grid
         fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
         fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
@@ -316,6 +387,15 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         print(f"  Highest downloads (rank #1): {downloads[0]:,}" if downloads else "N/A")
         print(f"  Top 10 nodes downloads: {sum(downloads[:10]):,}" if len(downloads) >= 10 else f"{sum(downloads):,}")
         print(f"  Top 100 nodes downloads: {sum(downloads[:100]):,}" if len(downloads) >= 100 else f"{sum(downloads):,}")
+
+        # Show download percentage milestones if indicators were shown
+        if show_indicators:
+            print(f"\nDownload percentage milestones:")
+            for percentage, node_index in sorted(milestones.items()):
+                if node_index is not None:
+                    print(f"  {percentage}% of downloads: Top {node_index + 1} nodes")
+                else:
+                    print(f"  {percentage}% of downloads: Not reached")
 
         return True
 

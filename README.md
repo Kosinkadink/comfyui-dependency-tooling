@@ -133,14 +133,18 @@ Shows how unique dependencies accumulate as nodes are added by rank.
 **Total Downloads Graph:**
 Displays total downloads per node pack, sorted by rank.
 ```bash
-> /graph downloads         # Linear scale (default)
-> /graph downloads log     # Logarithmic scale
-> /graph downloads &top 50 # Top 50 nodes only
+> /graph downloads                  # Linear scale (default)
+> /graph downloads log              # Logarithmic scale
+> /graph downloads indicators       # Linear scale with percentage milestones
+> /graph downloads log indicators   # Log scale with percentage milestones
+> /graph downloads &top 50          # Top 50 nodes only
 ```
 
-The downloads graph supports two scaling options:
-- **Linear scale** (default): Shows true proportional differences
-- **Logarithmic scale**: Useful for datasets with large ranges
+The downloads graph supports:
+- **Scaling options:**
+  - Linear scale (default): Shows true proportional differences
+  - Logarithmic scale: Useful for datasets with large ranges
+- **Percentage indicators** (optional): Shows vertical markers at nodes that account for 50%, 75%, 90%, and 99% of total downloads, helping visualize download concentration
 
 ### `/help`
 Display help information about available commands and modifiers.
@@ -266,9 +270,11 @@ python analysis.py -e "//list &nodes file:my_nodes.txt &dupes"
 
 ### Create visualization graphs
 ```bash
-python analysis.py -e "//graph &top 100"              # Cumulative dependencies for top 100
-python analysis.py -e "//graph downloads &save"       # Downloads graph saved to HTML
-python analysis.py -e "//graph downloads log &top 50" # Log scale downloads for top 50
+python analysis.py -e "//graph &top 100"                      # Cumulative dependencies for top 100
+python analysis.py -e "//graph downloads &save"               # Downloads graph saved to HTML
+python analysis.py -e "//graph downloads log &top 50"         # Log scale downloads for top 50
+python analysis.py -e "//graph downloads indicators"          # Downloads with percentage milestones
+python analysis.py -e "//graph downloads log indicators &save" # Log scale with indicators, saved
 ```
 
 ### Interactive session workflow
