@@ -10,7 +10,7 @@ from pathlib import Path
 from collections import defaultdict
 
 # Import from src modules
-from src.graph import create_cumulative_graph
+from src.graph import create_cumulative_graph, create_downloads_graph
 from src.utils import make_filename_safe
 
 
@@ -615,6 +615,8 @@ def print_help():
     print("  /nodes - Show details about nodes (sorted by downloads)")
     print("  /update - Fetch latest nodes from registry and update nodes.json")
     print("  /graph - Create cumulative dependencies visualization")
+    print("  /graph downloads - Create total downloads visualization (linear scale)")
+    print("  /graph downloads log - Create total downloads visualization (log scale)")
     print("  /summary - Show overall dependency analysis summary")
     print("  /help  - Show this help message")
     print("  /quit  - Exit interactive mode")
@@ -715,6 +717,17 @@ def interactive_mode(nodes_dict):
                 working_nodes = nodes_dict
                 original_query = query
 
+                # Check if it's a downloads graph and check for log scale
+                graph_type = 'dependencies'
+                use_log_scale = False
+                query_words = query.lower().split()
+
+                if 'downloads' in query_words:
+                    graph_type = 'downloads'
+                    # Check for log scale option
+                    if 'log' in query_words:
+                        use_log_scale = True
+
                 # Parse &nodes modifier first to filter by specific nodes
                 working_nodes = parse_nodes_modifier(query, working_nodes)
 
@@ -738,8 +751,11 @@ def interactive_mode(nodes_dict):
                             working_nodes = dict(sorted_nodes[top_n:])
                             print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
 
-                # Create cumulative dependencies graph with filtered nodes
-                create_cumulative_graph(working_nodes, save_to_file=save_results, query_desc=original_query)
+                # Create the appropriate graph type
+                if graph_type == 'downloads':
+                    create_downloads_graph(working_nodes, save_to_file=save_results, query_desc=original_query, log_scale=use_log_scale)
+                else:
+                    create_cumulative_graph(working_nodes, save_to_file=save_results, query_desc=original_query)
 
             elif query.lower() == '/help':
                 print_help()

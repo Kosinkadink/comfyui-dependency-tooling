@@ -116,6 +116,32 @@ Fetch the latest nodes data from the ComfyUI registry and update the local `node
 > /update             # Fetch latest data from registry
 ```
 
+### `/graph`
+Create interactive visualizations of node data using plotly.
+- Opens graphs in your default web browser
+- Supports all modifiers (&save, &top, &nodes)
+- Two types of visualizations available:
+
+**Cumulative Dependencies Graph:**
+Shows how unique dependencies accumulate as nodes are added by rank.
+```bash
+> /graph              # Show cumulative dependencies
+> /graph &top 100     # Show for top 100 nodes
+> /graph &save        # Save to HTML file
+```
+
+**Total Downloads Graph:**
+Displays total downloads per node pack, sorted by rank.
+```bash
+> /graph downloads         # Linear scale (default)
+> /graph downloads log     # Logarithmic scale
+> /graph downloads &top 50 # Top 50 nodes only
+```
+
+The downloads graph supports two scaling options:
+- **Linear scale** (default): Shows true proportional differences
+- **Logarithmic scale**: Useful for datasets with large ranges
+
 ### `/help`
 Display help information about available commands and modifiers.
 
@@ -238,6 +264,13 @@ python analysis.py -e "//summary"
 python analysis.py -e "//list &nodes file:my_nodes.txt &dupes"
 ```
 
+### Create visualization graphs
+```bash
+python analysis.py -e "//graph &top 100"              # Cumulative dependencies for top 100
+python analysis.py -e "//graph downloads &save"       # Downloads graph saved to HTML
+python analysis.py -e "//graph downloads log &top 50" # Log scale downloads for top 50
+```
+
 ### Interactive session workflow
 ```bash
 $ python analysis.py
@@ -247,6 +280,8 @@ $ python analysis.py
 > torch* &all        # See all torch-related packages
 > /list &dupes       # Check for version conflicts
 > /nodes &top 10     # See top 10 nodes by downloads
+> /graph             # View cumulative dependencies graph
+> /graph downloads log  # View downloads with log scale
 > numpy &nodes comfyui-kjnodes,rgthree-comfy  # Check numpy in specific nodes
 > /quit              # Exit
 ```

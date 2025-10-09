@@ -188,3 +188,127 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph")
     except Exception as e:
         print(f"Error creating graph: {e}")
         return False
+
+
+def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False):
+    """
+    Create and display a total downloads graph using plotly.
+
+    Args:
+        nodes_dict: Dictionary of nodes
+        save_to_file: Whether to save the graph to a file
+        query_desc: Query description for file naming and title
+        log_scale: Whether to use logarithmic scale for y-axis
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not PLOTLY_AVAILABLE:
+        print("Error: plotly is not installed. Install it with: pip install plotly")
+        return False
+
+    try:
+        print("Creating downloads graph...")
+
+        # Sort nodes by downloads (rank)
+        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+
+        node_ranks = []
+        downloads = []
+        node_names = []
+
+        for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
+            node_ranks.append(i)
+            downloads.append(node_data.get('downloads', 0))
+            node_names.append(node_data.get('name', node_id))  # Use node_id as fallback if name is missing
+
+        # Create the figure
+        fig = go.Figure()
+
+        # Add the main trace as a bar chart
+        fig.add_trace(go.Bar(
+            x=node_ranks,
+            y=downloads,
+            name='Total Downloads',
+            marker=dict(
+                color=downloads,
+                colorscale='Viridis',
+                showscale=True,
+                colorbar=dict(title='Downloads')
+            ),
+            hovertemplate='<b>Rank #%{x}</b><br>' +
+                         'Downloads: %{y:,.0f}<br>' +
+                         '%{text}<br>' +
+                         '<extra></extra>',
+            text=node_names
+        ))
+
+        # Build title based on query
+        title_parts = ['Total Downloads by Node Rank']
+        if '&top' in query_desc.lower():
+            top_match = re.search(r'&top\s+(-?\d+)', query_desc.lower())
+            if top_match:
+                n = int(top_match.group(1))
+                if n > 0:
+                    title_parts.append(f'(Top {n} nodes)')
+                else:
+                    title_parts.append(f'(Bottom {abs(n)} nodes)')
+
+        if '&nodes' in query_desc.lower():
+            title_parts.append('(Filtered nodes)')
+
+        # Update layout
+        layout_params = {
+            'title': ' '.join(title_parts),
+            'xaxis_title': 'Node Rank (sorted by popularity)',
+            'yaxis_title': 'Total Downloads' + (' (log scale)' if log_scale else ''),
+            'hovermode': 'closest',
+            'showlegend': False,
+            'template': 'plotly_white',
+            'width': 1200,
+            'height': 700
+        }
+
+        if log_scale:
+            layout_params['yaxis_type'] = 'log'
+
+        fig.update_layout(**layout_params)
+
+        # Add grid
+        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+
+        # Save to file if requested
+        if save_to_file:
+            # Create results directory if it doesn't exist
+            results_dir = Path('results')
+            results_dir.mkdir(exist_ok=True)
+
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            safe_query = make_filename_safe(query_desc)
+            filename = f"{timestamp}_{safe_query}.html"
+            filepath = results_dir / filename
+
+            # Save the graph
+            fig.write_html(str(filepath))
+            print(f"\n[Graph saved to: {filepath}]")
+
+        # Open in browser using plotly's show method
+        fig.show()
+
+        # Also show some statistics
+        total_downloads = sum(downloads)
+        print(f"\nStatistics:")
+        print(f"  Total nodes: {len(node_ranks):,}")
+        print(f"  Total downloads across all nodes: {total_downloads:,}")
+        print(f"  Average downloads per node: {total_downloads // len(node_ranks):,}" if node_ranks else "N/A")
+        print(f"  Highest downloads (rank #1): {downloads[0]:,}" if downloads else "N/A")
+        print(f"  Top 10 nodes downloads: {sum(downloads[:10]):,}" if len(downloads) >= 10 else f"{sum(downloads):,}")
+        print(f"  Top 100 nodes downloads: {sum(downloads[:100]):,}" if len(downloads) >= 100 else f"{sum(downloads):,}")
+
+        return True
+
+    except Exception as e:
+        print(f"Error creating downloads graph: {e}")
+        return False
