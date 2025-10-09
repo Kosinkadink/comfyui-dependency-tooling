@@ -421,6 +421,32 @@ def format_dependency_details(result, show_all_nodes=False):
     return '\n'.join(lines)
 
 
+def execute_command(nodes_dict, command):
+    """
+    Execute a single command from the command line.
+
+    Args:
+        nodes_dict: Dictionary of nodes
+        command: Command to execute
+    """
+    # Mock stdin with our command followed by quit
+    import io
+    import sys
+
+    # Save the original stdin
+    original_stdin = sys.stdin
+
+    # Create a mock stdin with our command and quit
+    sys.stdin = io.StringIO(f"{command}\n/quit\n")
+
+    try:
+        # Run interactive mode with our mocked input
+        interactive_mode(nodes_dict)
+    finally:
+        # Restore original stdin
+        sys.stdin = original_stdin
+
+
 def interactive_mode(nodes_dict):
     """
     Interactive chat loop for dependency queries.
@@ -1112,8 +1138,8 @@ def display_summary(nodes_dict):
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze ComfyUI node dependencies')
-    parser.add_argument('--ask', action='store_true',
-                       help='Enter interactive mode to query specific dependencies')
+    parser.add_argument('--execute', '-e', type=str,
+                       help='Execute a command as if in interactive mode (e.g., --execute "/summary")')
     args = parser.parse_args()
 
     nodes_dict = load_nodes_to_dict()
@@ -1122,11 +1148,12 @@ def main():
         print("Failed to load nodes data")
         return
 
-    if args.ask:
-        interactive_mode(nodes_dict)
+    if args.execute:
+        # Execute the command in a modified interactive mode
+        execute_command(nodes_dict, args.execute)
     else:
-        # Original behavior - show summary
-        display_summary(nodes_dict)
+        # Default behavior - interactive mode
+        interactive_mode(nodes_dict)
 
 
 if __name__ == "__main__":
