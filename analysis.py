@@ -49,6 +49,33 @@ def get_registry_nodes(print_time=True):
 
 
 
+def save_nodes_json(registry_data, filepath='manager-files/nodes.json'):
+    """
+    Save registry data to nodes.json file.
+
+    Args:
+        registry_data: The data to save (should have 'nodes' key)
+        filepath: Path to save the file to
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+        # Save with indent=4 for readability
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(registry_data, f, indent=4)
+
+        print(f"Successfully updated {filepath}")
+        print(f"Total nodes saved: {len(registry_data['nodes'])}")
+        return True
+    except Exception as e:
+        print(f"Error saving nodes.json: {e}")
+        return False
+
+
 def load_nodes_to_dict(filepath='manager-files/nodes.json'):
     """
     Load nodes.json and convert to a dictionary with 'id' as keys.
@@ -107,9 +134,12 @@ def compile_dependencies(nodes_dict):
     nodes_without_deps = []
     nodes_with_commented_deps = []
     nodes_with_pip_commands = []
+    nodes_with_git_deps = []  # Track nodes with git-based dependencies
     commented_dependencies = []
     pip_commands = []
     pip_command_count = defaultdict(int)
+    git_dependencies = []  # All git-based dependencies
+    git_dependency_count = defaultdict(int)  # Count by type of git dep
 
     for node_id, node_data in nodes_dict.items():
         if 'latest_version' in node_data and node_data['latest_version']:
@@ -122,27 +152,61 @@ def compile_dependencies(nodes_dict):
                     active_deps = []
                     commented_deps = []
                     node_pip_commands = []
+                    node_git_deps = []
 
                     for dep in deps:
                         dep_str = str(dep).strip()
+
+                        # Skip lines that start with # (full line comments)
+                        if dep_str.startswith('#'):
+                            commented_deps.append(dep_str)
+                            commented_dependencies.append(dep_str)
+                            continue
 
                         # Check for pip commands (starting with --)
                         if dep_str.startswith('--'):
                             node_pip_commands.append(dep_str)
                             pip_commands.append(dep_str)
                             pip_command_count[dep_str] += 1
-                        # Check for commented dependencies
-                        elif dep_str.startswith('#'):
-                            commented_deps.append(dep_str)
-                            commented_dependencies.append(dep_str)
                         else:
+                            # Strip inline comments (anything after #)
+                            if '#' in dep_str:
+                                dep_str = dep_str.split('#')[0].strip()
+
+                            # Skip if the line becomes empty after stripping comments
+                            if not dep_str:
+                                continue
+
+                            # Check for git-based dependencies
+                            is_git_dep = False
+
+                            # Type 1: Dependencies starting with git+
+                            if dep_str.startswith('git+'):
+                                is_git_dep = True
+                                node_git_deps.append(dep_str)
+                                git_dependencies.append(dep_str)
+                                git_dependency_count['git+ prefix'] += 1
+                                # Extract just the URL part for base name
+                                base_name = dep_str
+
+                            # Type 2: Dependencies with @ git+ (e.g., package @ git+https://...)
+                            elif ' @ git+' in dep_str:
+                                is_git_dep = True
+                                node_git_deps.append(dep_str)
+                                git_dependencies.append(dep_str)
+                                git_dependency_count['@ git+ style'] += 1
+                                # Extract package name before @
+                                base_name = dep_str.split(' @ ')[0].strip().lower()
+
                             # Regular dependency
+                            else:
+                                # Extract base package name (before version specifiers)
+                                dep_lower = dep_str.lower()
+                                base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
+
+                            # Add to active dependencies
                             active_deps.append(dep_str)
                             all_dependencies_raw.append(dep_str)
-
-                            # Extract base package name (before version specifiers)
-                            dep_lower = dep_str.lower()
-                            base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
 
                             # Count by base name
                             base_dependency_count[base_name] += 1
@@ -163,6 +227,14 @@ def compile_dependencies(nodes_dict):
                             'id': node_id,
                             'name': node_data.get('name', 'N/A'),
                             'commented_deps': commented_deps,
+                            'active_deps': active_deps
+                        })
+
+                    if node_git_deps:
+                        nodes_with_git_deps.append({
+                            'id': node_id,
+                            'name': node_data.get('name', 'N/A'),
+                            'git_deps': node_git_deps,
                             'active_deps': active_deps
                         })
 
@@ -196,6 +268,10 @@ def compile_dependencies(nodes_dict):
     sorted_pip_commands = sorted(pip_command_count.items(), key=lambda x: x[1], reverse=True)
     unique_pip_commands = list(pip_command_count.keys())
 
+    # Process git dependencies
+    unique_git_dependencies = list(set(git_dependencies))
+    sorted_git_dependency_types = sorted(git_dependency_count.items(), key=lambda x: x[1], reverse=True)
+
     return {
         'all_dependencies': all_dependencies_raw,
         'unique_dependencies': unique_dependencies_raw,  # Raw unique deps for compatibility
@@ -207,19 +283,25 @@ def compile_dependencies(nodes_dict):
         'nodes_without_dependencies': nodes_without_deps,
         'nodes_with_commented_dependencies': nodes_with_commented_deps,
         'nodes_with_pip_commands': nodes_with_pip_commands,
+        'nodes_with_git_dependencies': nodes_with_git_deps,  # Nodes with git-based deps
         'commented_dependencies': commented_dependencies,
         'unique_commented_dependencies': unique_commented,
         'pip_commands': pip_commands,
         'unique_pip_commands': unique_pip_commands,
         'pip_command_count': dict(pip_command_count),
         'sorted_pip_commands': sorted_pip_commands,
+        'git_dependencies': git_dependencies,  # All git-based dependencies
+        'unique_git_dependencies': unique_git_dependencies,  # Unique git deps
+        'git_dependency_count': dict(git_dependency_count),  # Count by type
+        'sorted_git_dependency_types': sorted_git_dependency_types,  # Sorted by count
         'total_dependencies': len(all_dependencies_raw),
         'unique_count': len(unique_base_dependencies),  # Count of unique base packages
         'unique_raw_count': len(unique_dependencies_raw),  # Count of unique raw specs
         'nodes_with_deps_count': len(nodes_with_deps),
         'nodes_without_deps_count': len(nodes_without_deps),
         'nodes_with_commented_count': len(nodes_with_commented_deps),
-        'nodes_with_pip_commands_count': len(nodes_with_pip_commands)
+        'nodes_with_pip_commands_count': len(nodes_with_pip_commands),
+        'nodes_with_git_deps_count': len(nodes_with_git_deps)  # Count of nodes with git deps
     }
 
 
@@ -245,11 +327,21 @@ def analyze_wildcard_dependencies(nodes_dict, pattern):
             if 'dependencies' in latest_version and latest_version['dependencies']:
                 for dep in latest_version['dependencies']:
                     dep_str = str(dep).strip()
-                    # Skip commented dependencies and pip commands
-                    if not dep_str.startswith('#') and not dep_str.startswith('--'):
-                        dep_lower = dep_str.lower()
-                        base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
-                        all_base_deps.add(base_name)
+                    # Skip full line comments and pip commands
+                    if dep_str.startswith('#') or dep_str.startswith('--'):
+                        continue
+
+                    # Strip inline comments
+                    if '#' in dep_str:
+                        dep_str = dep_str.split('#')[0].strip()
+
+                    # Skip if empty after stripping
+                    if not dep_str:
+                        continue
+
+                    dep_lower = dep_str.lower()
+                    base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
+                    all_base_deps.add(base_name)
 
     # Find dependencies matching the pattern
     for base_dep in all_base_deps:
@@ -311,9 +403,9 @@ def analyze_specific_dependency(nodes_dict, dep_name):
                 for dep in latest_version['dependencies']:
                     dep_str = str(dep).strip()
 
-                    # Check if it's commented
+                    # Skip full line comments
                     if dep_str.startswith('#'):
-                        # Check if this commented dependency matches our search
+                        # Check if this commented line mentions our dependency
                         commented_content = dep_str[1:].strip()
                         commented_lower = commented_content.lower()
                         base_name = re.split(r'[<>=!~]', commented_lower)[0].strip()
@@ -324,7 +416,15 @@ def analyze_specific_dependency(nodes_dict, dep_name):
                                 'node_name': node_data.get('name', 'N/A'),
                                 'commented_spec': dep_str
                             })
-                        continue  # Skip commented dependencies for main analysis
+                        continue  # Skip commented lines for main analysis
+
+                    # Strip inline comments (anything after #)
+                    if '#' in dep_str:
+                        dep_str = dep_str.split('#')[0].strip()
+
+                    # Skip if the line becomes empty after stripping comments
+                    if not dep_str:
+                        continue
 
                     # Parse dependency string (could be just name or name with version)
                     dep_lower = dep_str.lower()
@@ -428,7 +528,7 @@ def format_dependency_details(result, show_all_nodes=False):
     lines.append(f"Total nodes using this dependency: {result['total_nodes']}")
 
     if result['commented_count'] > 0:
-        lines.append(f"WARNING: Nodes with COMMENTED (inactive) dependency: {result['commented_count']}")
+        lines.append(f"Nodes with commented-out lines: {result['commented_count']}")
 
     if result['total_nodes'] > 0:
         lines.append(f"\nVersion specifications found:")
@@ -454,10 +554,10 @@ def format_dependency_details(result, show_all_nodes=False):
             lines.append(f"\n  ... and {result['total_nodes'] - 10} more nodes")
 
     if result['commented_count'] > 0:
-        lines.append(f"\n\nWARNING: Nodes with COMMENTED {result['dependency_name']} (not active):")
+        lines.append(f"\n\nNodes with commented-out {result['dependency_name']} lines:")
         for i, node in enumerate(result['nodes_with_commented'], 1):
             lines.append(f"  {i}. {node['node_name']} ({node['node_id']})")
-            lines.append(f"     Commented: {node['commented_spec']}")
+            lines.append(f"     Commented line: {node['commented_spec']}")
 
     return '\n'.join(lines)
 
@@ -516,6 +616,30 @@ def parse_nodes_modifier(query, nodes_dict):
     return filtered_nodes if filtered_nodes else nodes_dict
 
 
+def print_help():
+    """Print help information for commands and modifiers."""
+    print("\nCommands:")
+    print("  /list  - Show all unique dependency names")
+    print("         Use &dupes to show only deps with version conflicts")
+    print("  /top   - Show the most common dependencies")
+    print("  /nodes - Show details about nodes (sorted by downloads)")
+    print("  /update - Fetch latest nodes from registry and update nodes.json")
+    print("  /summary - Show overall dependency analysis summary")
+    print("  /help  - Show this help message")
+    print("  /quit  - Exit interactive mode")
+    print("\nSearch modifiers:")
+    print("  * - Wildcard (e.g., torch*, *audio*)")
+    print("  &save - Save results to file")
+    print("  &all - Show all results without limits")
+    print("  &top N - Only analyze top N nodes by downloads")
+    print("         Use negative for bottom N (e.g., &top -10)")
+    print("  &nodes - Filter by specific node IDs")
+    print("         Comma-separated: &nodes id1,id2")
+    print("         From file: &nodes file:nodelist.txt")
+    print("  Combine: numpy &top 50 &save")
+    print("\nOr type a dependency name directly (e.g., numpy, torch)")
+
+
 def execute_command(nodes_dict, command):
     """
     Execute a single command from the command line.
@@ -550,24 +674,9 @@ def interactive_mode(nodes_dict):
     print("INTERACTIVE DEPENDENCY ANALYZER")
     print("="*60)
     print("\nEnter a dependency name to analyze (or use /quit to exit)")
-    print("\nCommands:")
-    print("  /list  - Show all unique dependency names (use &dupes for version conflicts)")
-    print("  /top   - Show the most common dependencies")
-    print("  /nodes - Show details about nodes (sorted by downloads)")
-    print("  /update - Fetch latest nodes from registry and update nodes.json")
-    print("  /summary - Show overall dependency analysis summary")
-    print("  /help  - Show this help message")
-    print("  /quit  - Exit interactive mode")
-    print("\nSearch modifiers:")
-    print("  * - Use wildcards (e.g., torch*, *audio*)")
-    print("  &save - Save results to a file")
-    print("  &all - Show all results without limits")
-    print("  &top N - Only analyze top N nodes by downloads (e.g., &top 100)")
-    print("           Use negative for bottom N (e.g., &top -10 for least downloaded)")
-    print("  &nodes - Filter by specific node IDs")
-    print("           Comma-separated: &nodes id1,id2,id3")
-    print("           From file: &nodes file:path/to/nodelist.txt")
-    print("  Combine modifiers: numpy &top 50 &save\n")
+
+    # Print help information
+    print_help()
 
     # Pre-compile all dependencies for quick lookup
     dep_analysis = compile_dependencies(nodes_dict)
@@ -589,24 +698,18 @@ def interactive_mode(nodes_dict):
                 try:
                     registry_data = get_registry_nodes(print_time=True)
 
-                    # Save to manager-files/nodes.json
-                    output_path = 'manager-files/nodes.json'
-                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    # Save using the shared function
+                    if save_nodes_json(registry_data):
+                        # Reload the nodes dictionary with the updated data
+                        nodes_dict = load_nodes_to_dict()
 
-                    with open(output_path, 'w', encoding='utf-8') as f:
-                        json.dump(registry_data, f, indent=4)
+                        # Re-compile dependencies for the new data
+                        dep_analysis = compile_dependencies(nodes_dict)
+                        all_deps_lower = {dep.lower(): dep for dep in dep_analysis['unique_base_dependencies']}
 
-                    print(f"Successfully updated {output_path}")
-                    print(f"Total nodes saved: {len(registry_data['nodes'])}")
-
-                    # Reload the nodes dictionary with the updated data
-                    nodes_dict = load_nodes_to_dict()
-
-                    # Re-compile dependencies for the new data
-                    dep_analysis = compile_dependencies(nodes_dict)
-                    all_deps_lower = {dep.lower(): dep for dep in dep_analysis['unique_base_dependencies']}
-
-                    print("Nodes data has been refreshed and is ready for analysis.")
+                        print("Nodes data has been refreshed and is ready for analysis.")
+                    else:
+                        print("Failed to save nodes data")
                 except Exception as e:
                     print(f"Error updating nodes.json: {e}")
 
@@ -615,26 +718,7 @@ def interactive_mode(nodes_dict):
                 display_summary(nodes_dict)
 
             elif query.lower() == '/help':
-                print("\nCommands:")
-                print("  /list  - Show all unique dependency names")
-                print("         Use &dupes to show only deps with version conflicts")
-                print("  /top   - Show the most common dependencies")
-                print("  /nodes - Show details about nodes (sorted by downloads)")
-                print("  /update - Fetch latest nodes from registry and update nodes.json")
-                print("  /summary - Show overall dependency analysis summary")
-                print("  /help  - Show this help message")
-                print("  /quit  - Exit interactive mode")
-                print("\nSearch modifiers:")
-                print("  * - Wildcard (e.g., torch*, *audio*)")
-                print("  &save - Save results to file")
-                print("  &all - Show all results without limits")
-                print("  &top N - Only analyze top N nodes by downloads")
-                print("         Use negative for bottom N (e.g., &top -10)")
-                print("  &nodes - Filter by specific node IDs")
-                print("         Comma-separated: &nodes id1,id2")
-                print("         From file: &nodes file:nodelist.txt")
-                print("  Combine: numpy &top 50 &save")
-                print("\nOr type a dependency name directly (e.g., numpy, torch)")
+                print_help()
 
             elif query.lower() == '/list' or query.lower().startswith('/list '):
                 # Check for modifiers in /list command
@@ -1059,7 +1143,7 @@ def interactive_mode(nodes_dict):
                                 output_lines.append(f"Total nodes using this dependency: {dep_info['total_nodes']}")
 
                                 if dep_info['commented_count'] > 0:
-                                    output_lines.append(f"WARNING: Nodes with COMMENTED (inactive) dependency: {dep_info['commented_count']}")
+                                    output_lines.append(f"Nodes with commented-out lines: {dep_info['commented_count']}")
 
                                 if dep_info['total_nodes'] > 0:
                                     # Show version distribution
@@ -1088,7 +1172,7 @@ def interactive_mode(nodes_dict):
                                         output_lines.append(f"\n  ... and {dep_info['total_nodes'] - 5} more nodes using {dep_name}")
 
                                 if dep_info['commented_count'] > 0 and dep_info['nodes_with_commented']:
-                                    output_lines.append(f"\n  WARNING: Nodes with COMMENTED {dep_name}:")
+                                    output_lines.append(f"\n  Nodes with commented-out {dep_name} lines:")
                                     for i, node in enumerate(dep_info['nodes_with_commented'][:2], 1):
                                         output_lines.append(f"    {i}. {node['node_name']} ({node['node_id']})")
                                     if dep_info['commented_count'] > 2:
@@ -1220,9 +1304,11 @@ def display_summary(nodes_dict):
     print(f"Nodes with active dependencies: {dep_analysis['nodes_with_deps_count']}")
     print(f"Nodes without active dependencies: {dep_analysis['nodes_without_deps_count']}")
     if dep_analysis['nodes_with_commented_count'] > 0:
-        print(f"WARNING: Nodes with COMMENTED dependencies: {dep_analysis['nodes_with_commented_count']}")
+        print(f"Nodes with commented-out lines: {dep_analysis['nodes_with_commented_count']}")
     if dep_analysis['nodes_with_pip_commands_count'] > 0:
         print(f"INFO: Nodes with pip commands (--): {dep_analysis['nodes_with_pip_commands_count']}")
+    if dep_analysis['nodes_with_git_deps_count'] > 0:
+        print(f"Nodes with git-based dependencies: {dep_analysis['nodes_with_git_deps_count']}")
     print(f"\nTotal active dependency references: {dep_analysis['total_dependencies']}")
     print(f"Unique active packages (grouping versions): {dep_analysis['unique_count']}")
     print(f"Unique dependency specifications: {dep_analysis['unique_raw_count']}")
@@ -1233,33 +1319,10 @@ def display_summary(nodes_dict):
     for dep, count in dep_analysis['sorted_by_frequency'][:10]:
         print(f"  - {dep}: {count} nodes")
 
-    # Calculate ranks for display
-    rank_map = calculate_node_ranks(nodes_dict)
-
-    print(f"\nExample nodes with dependencies (first 3):")
-    for node_info in dep_analysis['nodes_with_dependencies'][:3]:
-        # Get full node data for additional info
-        node_data = nodes_dict.get(node_info['id'], {})
-        stars = node_data.get('github_stars', 0)
-        downloads = node_data.get('downloads', 0)
-        rank = rank_map.get(node_info['id'], 'N/A')
-        latest_version_info = node_data.get('latest_version', {})
-        latest_date = 'N/A'
-        if latest_version_info and 'createdAt' in latest_version_info:
-            date_str = latest_version_info['createdAt']
-            latest_date = date_str[:10] if date_str else 'N/A'
-
-        print(f"\n  Node: {node_info['name']} ({node_info['id']})")
-        print(f"  Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Latest: {latest_date}")
-        print(f"  Dependencies: {', '.join(node_info['dependencies'][:5])}")
-        if len(node_info['dependencies']) > 5:
-            print(f"    ... and {len(node_info['dependencies']) - 5} more")
-
     if dep_analysis['nodes_with_commented_count'] > 0:
-        print(f"\n\nWARNING: {dep_analysis['nodes_with_commented_count']} nodes have commented dependencies")
-        print("  Commented dependencies are included in their dependency lists but prefixed with #")
-        print("  These dependencies are NOT active and should not be installed.")
-        print(f"\n  Example nodes with commented dependencies:")
+        print(f"\n\nNOTE: {dep_analysis['nodes_with_commented_count']} nodes have commented-out lines")
+        print("  Lines starting with # are comments and are not active dependencies")
+        print(f"\n  Example nodes with commented lines:")
         for node_info in dep_analysis['nodes_with_commented_dependencies'][:3]:
             print(f"\n    Node: {node_info['name']} ({node_info['id']})")
             print(f"    Commented deps: {', '.join(node_info['commented_deps'][:3])}")
@@ -1282,6 +1345,25 @@ def display_summary(nodes_dict):
             if len(node_info['pip_commands']) > 2:
                 print(f"      ... and {len(node_info['pip_commands']) - 2} more commands")
 
+    if dep_analysis['nodes_with_git_deps_count'] > 0:
+        print(f"\n\nGit-based Dependencies: {dep_analysis['nodes_with_git_deps_count']} nodes")
+        print("  These dependencies are installed directly from git repositories")
+
+        if dep_analysis['sorted_git_dependency_types']:
+            print("  Breakdown by type:")
+            for dep_type, count in dep_analysis['sorted_git_dependency_types']:
+                print(f"    {dep_type}: {count} dependencies")
+
+        print(f"  Total unique git dependencies: {len(dep_analysis['unique_git_dependencies'])}")
+
+        print(f"\n  Example nodes with git dependencies:")
+        for node_info in dep_analysis['nodes_with_git_dependencies'][:3]:
+            print(f"\n    Node: {node_info['name']} ({node_info['id']})")
+            for git_dep in node_info['git_deps'][:2]:
+                print(f"    Git dep: {git_dep}")
+            if len(node_info['git_deps']) > 2:
+                print(f"      ... and {len(node_info['git_deps']) - 2} more git dependencies")
+
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze ComfyUI node dependencies')
@@ -1289,11 +1371,42 @@ def main():
                        help='Execute a command as if in interactive mode (e.g., --execute "/summary")')
     args = parser.parse_args()
 
+    # Special handling for /update command when nodes.json doesn't exist
+    if args.execute and args.execute.lower() in ['/update', '//update']:
+        # Try to run update directly without loading nodes first
+        print("\nFetching latest nodes from registry...")
+        try:
+            registry_data = get_registry_nodes(print_time=True)
+
+            # Save using the shared function
+            if not save_nodes_json(registry_data):
+                print("Failed to save nodes data")
+            return
+        except Exception as e:
+            print(f"Error updating nodes.json: {e}")
+            return
+
     nodes_dict = load_nodes_to_dict()
 
     if not nodes_dict:
-        print("Failed to load nodes data")
-        return
+        print("nodes.json not found. Fetching from registry...")
+        try:
+            registry_data = get_registry_nodes(print_time=True)
+
+            # Save using the shared function
+            if save_nodes_json(registry_data):
+                # Reload the nodes dictionary
+                nodes_dict = load_nodes_to_dict()
+
+                if not nodes_dict:
+                    print("Error: Failed to load nodes data even after update")
+                    return
+            else:
+                print("Failed to save nodes data")
+                return
+        except Exception as e:
+            print(f"Error fetching nodes from registry: {e}")
+            return
 
     if args.execute:
         # Execute the command in a modified interactive mode

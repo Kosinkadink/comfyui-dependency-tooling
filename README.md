@@ -106,6 +106,16 @@ Show detailed information about nodes, sorted by downloads.
 > /nodes &top -5      # Show bottom 5 nodes
 ```
 
+### `/update`
+Fetch the latest nodes data from the ComfyUI registry and update the local `nodes.json` file.
+- Automatically runs if `nodes.json` is not found
+- Shows fetch time and total nodes saved
+- Refreshes the in-memory data for immediate analysis
+
+```bash
+> /update             # Fetch latest data from registry
+```
+
 ### `/help`
 Display help information about available commands and modifiers.
 
@@ -258,19 +268,28 @@ File naming format: `YYYYMMDD_HHMMSS_queryname.txt`
 
 ## Data Source
 
-The tool analyzes data from `manager-files/nodes.json`, which contains information about 2960 ComfyUI node packages including:
+The tool analyzes data from `manager-files/nodes.json`, which contains information about ComfyUI node packages including:
 - Package metadata (name, description, repository)
 - Download and star counts
 - Dependency specifications
 - Version information
 
+The data is automatically fetched from the ComfyUI registry if `nodes.json` is not present. You can update it anytime using the `/update` command to get the latest node information.
+
 ## Special Dependency Handling
 
 ### Commented Dependencies
-Dependencies starting with `#` are treated as commented (inactive) and tracked separately with warnings.
+Dependencies starting with `#` are treated as commented (inactive) and tracked separately. Inline comments (text after `#`) are also stripped from dependency lines.
 
 ### Pip Commands
 Lines starting with `--` are pip installation flags (e.g., `--extra-index-url`) and are tracked separately.
+
+### Git-based Dependencies
+Dependencies installed directly from git repositories are tracked separately:
+- **git+ prefix**: Dependencies starting with `git+` (e.g., `git+https://github.com/user/repo.git`)
+- **@ git+ style**: Dependencies with `@ git+` format (e.g., `package @ git+https://github.com/user/repo.git`)
+
+These are displayed separately in the summary with breakdown by type.
 
 ### Version Grouping
 Different versions of the same package (e.g., `numpy`, `numpy>=1.20`, `numpy==1.24.0`) are grouped together for accurate statistics while preserving version information.
