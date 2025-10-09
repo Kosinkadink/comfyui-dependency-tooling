@@ -23,7 +23,7 @@ def calculate_cumulative_dependencies(nodes_dict):
         nodes_dict: Dictionary of nodes
 
     Returns:
-        Tuple of (node_counts, cumulative_deps, node_names)
+        Tuple of (node_counts, cumulative_deps, node_names, node_dep_counts)
     """
     # Sort nodes by downloads (rank)
     sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
@@ -31,9 +31,12 @@ def calculate_cumulative_dependencies(nodes_dict):
     node_counts = []
     cumulative_deps = []
     node_names = []
+    node_dep_counts = []
     unique_deps = set()
 
     for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
+        node_unique_deps = set()
+
         # Get dependencies for this node
         if 'latest_version' in node_data and node_data['latest_version']:
             if 'dependencies' in node_data['latest_version']:
@@ -61,13 +64,15 @@ def calculate_cumulative_dependencies(nodes_dict):
                             else:
                                 base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
 
+                            node_unique_deps.add(base_name)
                             unique_deps.add(base_name)
 
         node_counts.append(i)
         cumulative_deps.append(len(unique_deps))
         node_names.append(f"{node_data.get('name', 'N/A')} ({node_id})")
+        node_dep_counts.append(len(node_unique_deps))
 
-    return node_counts, cumulative_deps, node_names
+    return node_counts, cumulative_deps, node_names, node_dep_counts
 
 
 def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph"):
@@ -88,7 +93,12 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph")
 
     try:
         print("Calculating cumulative dependencies...")
-        node_counts, cumulative_deps, node_names = calculate_cumulative_dependencies(nodes_dict)
+        node_counts, cumulative_deps, node_names, node_dep_counts = calculate_cumulative_dependencies(nodes_dict)
+
+        # Create hover text with dependency counts
+        hover_texts = []
+        for i in range(len(node_names)):
+            hover_texts.append(f"{node_names[i]}<br>Node dependencies: {node_dep_counts[i]}")
 
         # Create the figure
         fig = go.Figure()
@@ -104,14 +114,14 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph")
                          'Total unique dependencies: %{y}<br>' +
                          '%{text}<br>' +
                          '<extra></extra>',
-            text=node_names
+            text=hover_texts
         ))
 
         # Add markers for every 100 nodes
         marker_indices = [i-1 for i in range(100, len(node_counts)+1, 100)]
         marker_x = [node_counts[i] for i in marker_indices if i < len(node_counts)]
         marker_y = [cumulative_deps[i] for i in marker_indices if i < len(cumulative_deps)]
-        marker_text = [node_names[i] for i in marker_indices if i < len(node_names)]
+        marker_hover_texts = [hover_texts[i] for i in marker_indices if i < len(hover_texts)]
 
         fig.add_trace(go.Scatter(
             x=marker_x,
@@ -123,7 +133,7 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph")
                          'Total dependencies: %{y}<br>' +
                          '%{text}<br>' +
                          '<extra></extra>',
-            text=marker_text
+            text=marker_hover_texts
         ))
 
         # Build title based on query
