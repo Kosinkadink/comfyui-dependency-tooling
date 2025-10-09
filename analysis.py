@@ -9,6 +9,13 @@ from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
 
+# Try to import plotly for graph visualization
+try:
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+
 
 base_url = "https://api.comfy.org"
 
@@ -624,6 +631,7 @@ def print_help():
     print("  /top   - Show the most common dependencies")
     print("  /nodes - Show details about nodes (sorted by downloads)")
     print("  /update - Fetch latest nodes from registry and update nodes.json")
+    print("  /graph - Create cumulative dependencies visualization")
     print("  /summary - Show overall dependency analysis summary")
     print("  /help  - Show this help message")
     print("  /quit  - Exit interactive mode")
@@ -716,6 +724,39 @@ def interactive_mode(nodes_dict):
             elif query.lower() == '/summary':
                 # Display the default summary
                 display_summary(nodes_dict)
+
+            elif query.lower() == '/graph' or query.lower().startswith('/graph '):
+                # Parse modifiers for /graph command
+                save_results = False
+                top_n = None
+                working_nodes = nodes_dict
+                original_query = query
+
+                # Parse &nodes modifier first to filter by specific nodes
+                working_nodes = parse_nodes_modifier(query, working_nodes)
+
+                # Parse &save modifier
+                if '&save' in query.lower():
+                    save_results = True
+
+                # Parse &top modifier if present
+                if '&top' in query.lower():
+                    import re
+                    top_match = re.search(r'&top\s+(-?\d+)', query.lower())
+                    if top_match:
+                        top_n = int(top_match.group(1))
+                        # Filter to top N nodes by downloads
+                        sorted_nodes = sorted(working_nodes.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+                        if top_n > 0:
+                            working_nodes = dict(sorted_nodes[:top_n])
+                            print(f"\n[Filtering to top {top_n} nodes by downloads]")
+                        else:
+                            # Negative number means bottom N nodes
+                            working_nodes = dict(sorted_nodes[top_n:])
+                            print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
+
+                # Create cumulative dependencies graph with filtered nodes
+                create_cumulative_graph(working_nodes, save_to_file=save_results, query_desc=original_query)
 
             elif query.lower() == '/help':
                 print_help()
@@ -1275,6 +1316,182 @@ def interactive_mode(nodes_dict):
             break
         except Exception as e:
             print(f"Error: {e}")
+
+
+def calculate_cumulative_dependencies(nodes_dict):
+    """
+    Calculate cumulative unique dependencies as nodes are added by rank.
+
+    Args:
+        nodes_dict: Dictionary of nodes
+
+    Returns:
+        Tuple of (node_counts, cumulative_deps, node_names)
+    """
+    # Sort nodes by downloads (rank)
+    sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+
+    node_counts = []
+    cumulative_deps = []
+    node_names = []
+    unique_deps = set()
+
+    for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
+        # Get dependencies for this node
+        if 'latest_version' in node_data and node_data['latest_version']:
+            if 'dependencies' in node_data['latest_version']:
+                deps = node_data['latest_version']['dependencies']
+                if deps and isinstance(deps, list):
+                    for dep in deps:
+                        dep_str = str(dep).strip()
+
+                        # Skip comments and pip commands
+                        if dep_str.startswith('#') or dep_str.startswith('--'):
+                            continue
+
+                        # Strip inline comments
+                        if '#' in dep_str:
+                            dep_str = dep_str.split('#')[0].strip()
+
+                        if dep_str:
+                            # Extract base package name
+                            dep_lower = dep_str.lower()
+                            # Handle git dependencies differently
+                            if dep_str.startswith('git+'):
+                                base_name = dep_str  # Use full git URL as unique identifier
+                            elif ' @ git+' in dep_str:
+                                base_name = dep_str.split(' @ ')[0].strip().lower()
+                            else:
+                                base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
+
+                            unique_deps.add(base_name)
+
+        node_counts.append(i)
+        cumulative_deps.append(len(unique_deps))
+        node_names.append(f"{node_data.get('name', 'N/A')} ({node_id})")
+
+    return node_counts, cumulative_deps, node_names
+
+
+def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph"):
+    """
+    Create and display a cumulative dependencies graph using plotly.
+
+    Args:
+        nodes_dict: Dictionary of nodes
+        save_to_file: Whether to save the graph to a file
+        query_desc: Query description for file naming and title
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not PLOTLY_AVAILABLE:
+        print("Error: plotly is not installed. Install it with: pip install plotly")
+        return False
+
+    try:
+        print("Calculating cumulative dependencies...")
+        node_counts, cumulative_deps, node_names = calculate_cumulative_dependencies(nodes_dict)
+
+        # Create the figure
+        fig = go.Figure()
+
+        # Add the main trace
+        fig.add_trace(go.Scatter(
+            x=node_counts,
+            y=cumulative_deps,
+            mode='lines',
+            name='Cumulative Dependencies',
+            line=dict(color='blue', width=2),
+            hovertemplate='<b>Node %{x}</b><br>' +
+                         'Total unique dependencies: %{y}<br>' +
+                         '%{text}<br>' +
+                         '<extra></extra>',
+            text=node_names
+        ))
+
+        # Add markers for every 100 nodes
+        marker_indices = [i-1 for i in range(100, len(node_counts)+1, 100)]
+        marker_x = [node_counts[i] for i in marker_indices if i < len(node_counts)]
+        marker_y = [cumulative_deps[i] for i in marker_indices if i < len(cumulative_deps)]
+        marker_text = [node_names[i] for i in marker_indices if i < len(node_names)]
+
+        fig.add_trace(go.Scatter(
+            x=marker_x,
+            y=marker_y,
+            mode='markers',
+            name='Every 100 nodes',
+            marker=dict(color='red', size=8),
+            hovertemplate='<b>Node %{x}</b><br>' +
+                         'Total dependencies: %{y}<br>' +
+                         '%{text}<br>' +
+                         '<extra></extra>',
+            text=marker_text
+        ))
+
+        # Build title based on query
+        title_parts = ['Cumulative Unique Dependencies by Node Rank']
+        if '&top' in query_desc.lower():
+            import re
+            top_match = re.search(r'&top\s+(-?\d+)', query_desc.lower())
+            if top_match:
+                n = int(top_match.group(1))
+                if n > 0:
+                    title_parts.append(f'(Top {n} nodes)')
+                else:
+                    title_parts.append(f'(Bottom {abs(n)} nodes)')
+
+        if '&nodes' in query_desc.lower():
+            title_parts.append('(Filtered nodes)')
+
+        # Update layout
+        fig.update_layout(
+            title=' '.join(title_parts),
+            xaxis_title='Number of Node Packs (sorted by popularity)',
+            yaxis_title='Total Unique Dependencies',
+            hovermode='closest',
+            showlegend=True,
+            template='plotly_white',
+            width=1200,
+            height=700
+        )
+
+        # Add grid
+        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+
+        # Save to file if requested
+        if save_to_file:
+            # Create results directory if it doesn't exist
+            results_dir = Path('results')
+            results_dir.mkdir(exist_ok=True)
+
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            safe_query = make_filename_safe(query_desc)
+            filename = f"{timestamp}_{safe_query}.html"
+            filepath = results_dir / filename
+
+            # Save the graph
+            fig.write_html(str(filepath))
+            print(f"\n[Graph saved to: {filepath}]")
+
+        # Open in browser using plotly's show method
+        fig.show()
+
+        # Also show some statistics
+        print(f"\nStatistics:")
+        print(f"  Top 10 nodes: {cumulative_deps[9] if len(cumulative_deps) > 9 else 'N/A'} unique dependencies")
+        print(f"  Top 50 nodes: {cumulative_deps[49] if len(cumulative_deps) > 49 else 'N/A'} unique dependencies")
+        print(f"  Top 100 nodes: {cumulative_deps[99] if len(cumulative_deps) > 99 else 'N/A'} unique dependencies")
+        print(f"  Top 500 nodes: {cumulative_deps[499] if len(cumulative_deps) > 499 else 'N/A'} unique dependencies")
+        print(f"  All {len(node_counts)} nodes: {cumulative_deps[-1] if cumulative_deps else 'N/A'} unique dependencies")
+
+        return True
+
+    except Exception as e:
+        print(f"Error creating graph: {e}")
+        return False
 
 
 def display_summary(nodes_dict):
