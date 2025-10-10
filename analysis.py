@@ -14,7 +14,127 @@ from src.graph import create_cumulative_graph, create_downloads_graph
 from src.utils import make_filename_safe
 
 
+import concurrent.futures
+import threading
+
 base_url = "https://api.comfy.org"
+
+def get_registry_nodes_concurrent(print_time=True, max_workers=10):
+    """
+    Fetch all nodes from registry using concurrent requests for faster performance.
+
+    Args:
+        print_time: Whether to print the fetch time
+        max_workers: Maximum number of concurrent threads
+
+    Returns:
+        Dictionary with 'nodes' key containing all nodes
+    """
+    nodes_dict = {}
+    lock = threading.Lock()
+
+    def fetch_page(page_num, retries=3):
+        """Fetch a single page of nodes with retry logic."""
+        sub_uri = f'{base_url}/nodes?page={page_num}&limit=30'
+
+        for attempt in range(retries):
+            try:
+                response = requests.get(sub_uri, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.Timeout:
+                if attempt < retries - 1:
+                    print(f"Timeout on page {page_num}, attempt {attempt + 1}/{retries}, retrying...")
+                    time.sleep(0.5 * (attempt + 1))  # Exponential backoff
+                else:
+                    print(f"Failed to fetch page {page_num} after {retries} attempts (timeout)")
+                    return None
+            except Exception as e:
+                if attempt < retries - 1:
+                    print(f"Error on page {page_num}, attempt {attempt + 1}/{retries}: {e}, retrying...")
+                    time.sleep(0.5 * (attempt + 1))
+                else:
+                    print(f"Failed to fetch page {page_num} after {retries} attempts: {e}")
+                    return None
+
+        return None
+
+    def process_page_results(json_obj):
+        """Process the results from a page fetch."""
+        if json_obj and 'nodes' in json_obj:
+            with lock:
+                for node in json_obj['nodes']:
+                    if 'id' in node:  # Ensure node has an ID
+                        nodes_dict[node['id']] = node
+                    else:
+                        print(f"Warning: Node without ID found: {node}")
+
+    start_time = time.perf_counter()
+
+    # First, fetch page 1 to get total pages
+    print("Fetching first page to determine total pages...")
+    first_page = fetch_page(1)
+    if not first_page:
+        print("Failed to fetch first page")
+        return {'nodes': []}
+
+    total_pages = first_page.get('totalPages', 1)
+    print(f"Total pages to fetch: {total_pages}")
+
+    # Process first page
+    process_page_results(first_page)
+
+    if total_pages > 1:
+        # Fetch remaining pages concurrently
+        print(f"Fetching remaining {total_pages - 1} pages concurrently with {max_workers} workers...")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all page fetches
+            future_to_page = {
+                executor.submit(fetch_page, page): page
+                for page in range(2, total_pages + 1)
+            }
+
+            # Process results as they complete
+            completed = 0
+            failed_pages = []
+            for future in concurrent.futures.as_completed(future_to_page):
+                page = future_to_page[future]
+                try:
+                    json_obj = future.result()
+                    if json_obj:
+                        process_page_results(json_obj)
+                    else:
+                        failed_pages.append(page)
+                    completed += 1
+                    if completed % 10 == 0:  # Progress update every 10 pages
+                        print(f"  Processed {completed}/{total_pages - 1} pages...")
+                except Exception as e:
+                    print(f"Error processing page {page}: {e}")
+                    failed_pages.append(page)
+
+            if failed_pages:
+                print(f"Warning: Failed to fetch {len(failed_pages)} pages: {failed_pages}")
+                print("Attempting sequential retry for failed pages...")
+                for page in failed_pages:
+                    json_obj = fetch_page(page, retries=5)  # More retries for failed pages
+                    if json_obj:
+                        process_page_results(json_obj)
+                        print(f"  Successfully recovered page {page}")
+                    else:
+                        print(f"  Could not recover page {page}")
+
+    end_time = time.perf_counter()
+    if print_time:
+        print(f"Time taken to fetch all nodes (concurrent): {end_time - start_time:.2f} seconds")
+        print(f"Total nodes fetched: {len(nodes_dict)}")
+
+    # Add default latest_version for nodes without it
+    for v in nodes_dict.values():
+        if 'latest_version' not in v:
+            v['latest_version'] = dict(version='nightly')
+
+    return {'nodes': list(nodes_dict.values())}
 
 def get_registry_nodes(print_time=True):
     # get all nodes from registry in a similar fashion as ComfyUI-Manager
@@ -689,9 +809,9 @@ def interactive_mode(nodes_dict):
 
             elif query.lower() == '/update':
                 # Update nodes.json from the registry
-                print("\nFetching latest nodes from registry...")
+                print("\nFetching latest nodes from registry (using concurrent downloads)...")
                 try:
-                    registry_data = get_registry_nodes(print_time=True)
+                    registry_data = get_registry_nodes_concurrent(print_time=True, max_workers=10)
 
                     # Save using the shared function
                     if save_nodes_json(registry_data):
@@ -1420,9 +1540,9 @@ def main():
     # Special handling for /update command when nodes.json doesn't exist
     if args.execute and args.execute.lower() in ['/update', '//update']:
         # Try to run update directly without loading nodes first
-        print("\nFetching latest nodes from registry...")
+        print("\nFetching latest nodes from registry (using concurrent downloads)...")
         try:
-            registry_data = get_registry_nodes(print_time=True)
+            registry_data = get_registry_nodes_concurrent(print_time=True, max_workers=10)
 
             # Save using the shared function
             if not save_nodes_json(registry_data):
@@ -1435,9 +1555,9 @@ def main():
     nodes_dict = load_nodes_to_dict()
 
     if not nodes_dict:
-        print("nodes.json not found. Fetching from registry...")
+        print("nodes.json not found. Fetching from registry (using concurrent downloads)...")
         try:
-            registry_data = get_registry_nodes(print_time=True)
+            registry_data = get_registry_nodes_concurrent(print_time=True, max_workers=10)
 
             # Save using the shared function
             if save_nodes_json(registry_data):
