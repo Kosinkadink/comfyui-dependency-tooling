@@ -251,6 +251,32 @@ Filter results to only include specific nodes by their IDs.
 
 The file should contain one node ID per line.
 
+### `&web-dir`
+Filter results to only include nodes with web directories (nodes that have .py files with WEB_DIRECTORY variable). Only works with `/nodes` command.
+
+```bash
+> /nodes &web-dir                # Show nodes with web directories (default limit 20)
+> /nodes &web-dir &top 50        # Show top 50 nodes with web directories
+> /nodes &web-dir &all           # Show all nodes with web directories
+```
+
+- Filters to nodes that have web directory files
+- Can be combined with &top, &all, &save modifiers
+- Shows "Web: Yes" indicator in results
+
+### `&routes`
+Filter results to only include nodes with routes (nodes that have .py files with route-any decorator). Only works with `/nodes` command.
+
+```bash
+> /nodes &routes                 # Show nodes with routes (default limit 20)
+> /nodes &routes &top 50         # Show top 50 nodes with routes
+> /nodes &routes &all            # Show all nodes with routes
+```
+
+- Filters to nodes that have route files
+- Can be combined with &top, &all, &save modifiers
+- Shows "Routes: Yes" indicator in results
+
 ### `&update-reqs`
 Fetch actual dependencies from requirements.txt files in repositories. Only works with `/nodes` command.
 
@@ -338,6 +364,20 @@ python analysis.py -e "//nodes kjnodes!"                      # Auto-select firs
 python analysis.py -e "//nodes &top 20 &update-reqs"
 ```
 
+### Filter nodes by web directories
+```bash
+python analysis.py -e "//nodes &web-dir"                # Show all nodes with web directories
+python analysis.py -e "//nodes &web-dir &top 50"        # Show top 50 nodes with web directories
+python analysis.py -e "//nodes &web-dir &top 20 &save"  # Save results to file
+```
+
+### Filter nodes by routes
+```bash
+python analysis.py -e "//nodes &routes"                 # Show all nodes with routes
+python analysis.py -e "//nodes &routes &top 50"         # Show top 50 nodes with routes
+python analysis.py -e "//nodes &routes &all &save"      # Show and save all nodes with routes
+```
+
 ### Interactive session workflow
 ```bash
 $ python analysis.py
@@ -349,6 +389,8 @@ $ python analysis.py
 > /nodes &top 10     # See top 10 nodes by downloads
 > /nodes comfyui-kjnodes  # View detailed deps for a specific node
 > /nodes kjnodes!    # Quick jump to first matching node
+> /nodes &web-dir &top 20  # Show top 20 nodes with web directories
+> /nodes &routes &top 10   # Show top 10 nodes with routes
 > /nodes comfyui-kjnodes &update-reqs  # Update deps from requirements.txt
 > /nodes &top 5 &update-reqs  # Update top 5 nodes with actual requirements
 > /graph             # View cumulative dependencies graph
