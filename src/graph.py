@@ -224,24 +224,28 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         # Sort nodes by downloads (rank)
         sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
 
-        node_ranks = []
-        downloads = []
-        node_names = []
-        node_ids = []
-        dep_counts = []
+        # Separate lists for nodes with and without web directories
+        web_dir_ranks = []
+        web_dir_downloads = []
+        web_dir_names = []
+        web_dir_ids = []
+        web_dir_dep_counts = []
+
+        no_web_dir_ranks = []
+        no_web_dir_downloads = []
+        no_web_dir_names = []
+        no_web_dir_ids = []
+        no_web_dir_dep_counts = []
+
         cumulative_downloads = []
 
         total_downloads = sum(node[1].get('downloads', 0) for node in sorted_nodes)
         running_total = 0
 
         for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
-            node_ranks.append(i)
             download_count = node_data.get('downloads', 0)
-            downloads.append(download_count)
             running_total += download_count
             cumulative_downloads.append(running_total)
-            node_names.append(node_data.get('name', node_id))  # Use node_id as fallback if name is missing
-            node_ids.append(node_id)
 
             # Count dependencies
             dep_count = 0
@@ -250,7 +254,23 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     deps = node_data['latest_version']['dependencies']
                     if deps and isinstance(deps, list):
                         dep_count = len(deps)
-            dep_counts.append(dep_count)
+
+            # Check if node has web directory
+            has_web_dir = bool(node_data.get('_web_directories'))
+
+            # Append to appropriate lists
+            if has_web_dir:
+                web_dir_ranks.append(i)
+                web_dir_downloads.append(download_count)
+                web_dir_names.append(node_data.get('name', node_id))
+                web_dir_ids.append(node_id)
+                web_dir_dep_counts.append(dep_count)
+            else:
+                no_web_dir_ranks.append(i)
+                no_web_dir_downloads.append(download_count)
+                no_web_dir_names.append(node_data.get('name', node_id))
+                no_web_dir_ids.append(node_id)
+                no_web_dir_dep_counts.append(dep_count)
 
         # Calculate percentage milestones
         milestones = {
@@ -269,27 +289,49 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         # Create the figure
         fig = go.Figure()
 
-        # Add the main trace as a bar chart
-        fig.add_trace(go.Bar(
-            x=node_ranks,
-            y=downloads,
-            name='Total Downloads',
-            marker=dict(
-                color=downloads,
-                colorscale='Viridis',
-                showscale=True,
-                colorbar=dict(title='Downloads')
-            ),
-            text=node_names,  # Show node names on the bars
-            textposition='auto',
-            customdata=list(zip(node_ids, dep_counts)),
-            hovertemplate='<b>Rank #%{x}</b><br>' +
-                         'Downloads: %{y:,.0f}<br>' +
-                         'Name: %{text}<br>' +
-                         'ID: %{customdata[0]}<br>' +
-                         'Dependencies: %{customdata[1]}<br>' +
-                         '<extra></extra>'
-        ))
+        # Add trace for nodes without web directories (blue)
+        if no_web_dir_ranks:
+            fig.add_trace(go.Bar(
+                x=no_web_dir_ranks,
+                y=no_web_dir_downloads,
+                name='No Web Directory',
+                marker=dict(
+                    color='#3498db',  # Blue
+                    line=dict(width=0.5, color='#2c3e50')
+                ),
+                text=no_web_dir_names,
+                textposition='auto',
+                customdata=list(zip(no_web_dir_ids, no_web_dir_dep_counts)),
+                hovertemplate='<b>Rank #%{x}</b><br>' +
+                             'Downloads: %{y:,.0f}<br>' +
+                             'Name: %{text}<br>' +
+                             'ID: %{customdata[0]}<br>' +
+                             'Dependencies: %{customdata[1]}<br>' +
+                             'Web Directory: No<br>' +
+                             '<extra></extra>'
+            ))
+
+        # Add trace for nodes with web directories (green)
+        if web_dir_ranks:
+            fig.add_trace(go.Bar(
+                x=web_dir_ranks,
+                y=web_dir_downloads,
+                name='Has Web Directory',
+                marker=dict(
+                    color='#2ecc71',  # Green
+                    line=dict(width=0.5, color='#27ae60')
+                ),
+                text=web_dir_names,
+                textposition='auto',
+                customdata=list(zip(web_dir_ids, web_dir_dep_counts)),
+                hovertemplate='<b>Rank #%{x}</b><br>' +
+                             'Downloads: %{y:,.0f}<br>' +
+                             'Name: %{text}<br>' +
+                             'ID: %{customdata[0]}<br>' +
+                             'Dependencies: %{customdata[1]}<br>' +
+                             'Web Directory: Yes<br>' +
+                             '<extra></extra>'
+            ))
 
         # Build title based on query
         title_parts = ['Total Downloads by Node Rank']
@@ -311,7 +353,16 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             'xaxis_title': 'Node Rank (sorted by popularity)',
             'yaxis_title': 'Total Downloads' + (' (log scale)' if log_scale else ''),
             'hovermode': 'closest',
-            'showlegend': False,
+            'showlegend': True,
+            'legend': dict(
+                x=1.0,
+                y=1.0,
+                xanchor='right',
+                yanchor='top',
+                bgcolor='rgba(255, 255, 255, 0.8)',
+                bordercolor='rgba(0, 0, 0, 0.2)',
+                borderwidth=1
+            ),
             'template': 'plotly_white',
             'width': 1200,
             'height': 700
@@ -324,36 +375,47 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
 
         # Add percentage milestone annotations if requested
         if show_indicators:
-            for percentage, node_index in milestones.items():
-                if node_index is not None and node_index < len(node_ranks):
-                    # Add vertical line at milestone
-                    fig.add_shape(
-                        type="line",
-                        x0=node_ranks[node_index], y0=0,
-                        x1=node_ranks[node_index], y1=downloads[node_index],
-                        line=dict(
-                            color="red",
-                            width=2,
-                            dash="dash"
-                        )
-                    )
+            # Create a mapping of rank to downloads for milestone lookup
+            rank_to_downloads = {}
+            for rank, download in zip(web_dir_ranks, web_dir_downloads):
+                rank_to_downloads[rank] = download
+            for rank, download in zip(no_web_dir_ranks, no_web_dir_downloads):
+                rank_to_downloads[rank] = download
 
-                    # Add annotation
-                    fig.add_annotation(
-                        x=node_ranks[node_index],
-                        y=downloads[node_index],
-                        text=f"{percentage}% of downloads<br>Rank #{node_ranks[node_index]}",
-                        showarrow=True,
-                        arrowhead=2,
-                        arrowsize=1,
-                        arrowwidth=2,
-                        arrowcolor="red",
-                        ax=30,
-                        ay=-40,
-                        bgcolor="white",
-                        bordercolor="red",
-                        borderwidth=1
-                    )
+            for percentage, node_index in milestones.items():
+                if node_index is not None and node_index < len(sorted_nodes):
+                    rank = node_index + 1  # Convert index to rank (1-based)
+                    if rank in rank_to_downloads:
+                        download_count = rank_to_downloads[rank]
+
+                        # Add vertical line at milestone
+                        fig.add_shape(
+                            type="line",
+                            x0=rank, y0=0,
+                            x1=rank, y1=download_count,
+                            line=dict(
+                                color="red",
+                                width=2,
+                                dash="dash"
+                            )
+                        )
+
+                        # Add annotation
+                        fig.add_annotation(
+                            x=rank,
+                            y=download_count,
+                            text=f"{percentage}% of downloads<br>Rank #{rank}",
+                            showarrow=True,
+                            arrowhead=2,
+                            arrowsize=1,
+                            arrowwidth=2,
+                            arrowcolor="red",
+                            ax=30,
+                            ay=-40,
+                            bgcolor="white",
+                            bordercolor="red",
+                            borderwidth=1
+                        )
 
         # Add grid
         fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
@@ -379,14 +441,23 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         fig.show()
 
         # Also show some statistics
-        total_downloads = sum(downloads)
+        total_nodes = len(sorted_nodes)
+        total_downloads_sum = sum(node[1].get('downloads', 0) for node in sorted_nodes)
+        web_dir_count = len(web_dir_ranks)
+        no_web_dir_count = len(no_web_dir_ranks)
+
         print(f"\nStatistics:")
-        print(f"  Total nodes: {len(node_ranks):,}")
-        print(f"  Total downloads across all nodes: {total_downloads:,}")
-        print(f"  Average downloads per node: {total_downloads // len(node_ranks):,}" if node_ranks else "N/A")
-        print(f"  Highest downloads (rank #1): {downloads[0]:,}" if downloads else "N/A")
-        print(f"  Top 10 nodes downloads: {sum(downloads[:10]):,}" if len(downloads) >= 10 else f"{sum(downloads):,}")
-        print(f"  Top 100 nodes downloads: {sum(downloads[:100]):,}" if len(downloads) >= 100 else f"{sum(downloads):,}")
+        print(f"  Total nodes: {total_nodes:,}")
+        print(f"  Nodes with web directories: {web_dir_count:,} ({web_dir_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
+        print(f"  Nodes without web directories: {no_web_dir_count:,} ({no_web_dir_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
+        print(f"  Total downloads across all nodes: {total_downloads_sum:,}")
+        print(f"  Average downloads per node: {total_downloads_sum // total_nodes:,}" if total_nodes > 0 else "N/A")
+        if sorted_nodes:
+            print(f"  Highest downloads (rank #1): {sorted_nodes[0][1].get('downloads', 0):,}")
+            if len(sorted_nodes) >= 10:
+                print(f"  Top 10 nodes downloads: {sum(node[1].get('downloads', 0) for node in sorted_nodes[:10]):,}")
+            if len(sorted_nodes) >= 100:
+                print(f"  Top 100 nodes downloads: {sum(node[1].get('downloads', 0) for node in sorted_nodes[:100]):,}")
 
         # Show download percentage milestones if indicators were shown
         if show_indicators:

@@ -5,6 +5,7 @@ import fnmatch
 import os
 import time
 import requests
+import csv
 from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
@@ -839,6 +840,182 @@ def delete_requirements_cache(node_id):
     return False
 
 
+def parse_web_directory_csv(csv_file_path):
+    """
+    Parse a CSV file containing web directory information.
+    Only tracks unique .py files per repository.
+
+    Args:
+        csv_file_path: Path to the CSV file
+
+    Returns:
+        Dictionary mapping repository URLs to set of unique file paths
+    """
+    web_dirs = {}
+
+    try:
+        with open(csv_file_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            next(reader)  # Skip header
+
+            for row in reader:
+                if len(row) >= 4:
+                    repo_url = row[1]  # Column 2: Repository
+                    file_path = row[3]  # Column 4: File path
+
+                    # Only track .py files
+                    if file_path.endswith('.py'):
+                        if repo_url not in web_dirs:
+                            web_dirs[repo_url] = set()
+                        web_dirs[repo_url].add(file_path)
+    except Exception as e:
+        print(f"Warning: Could not parse CSV {csv_file_path}: {e}")
+
+    return web_dirs
+
+
+def load_web_directory_data(nodes_dict):
+    """
+    Load web directory data from CSV files in web-directories folder.
+    Maps repository URLs to node IDs and adds web directory info directly to nodes_dict.
+
+    Args:
+        nodes_dict: Dictionary of all nodes (modified in place)
+
+    Returns:
+        Number of nodes with web directory data
+    """
+    web_dir_path = Path('web-directories')
+    if not web_dir_path.exists():
+        return 0
+
+    # Find all CSV files
+    csv_files = list(web_dir_path.glob('*.csv'))
+    if not csv_files:
+        return 0
+
+    # Parse all CSV files and collect web directory data
+    all_web_dirs = {}
+    for csv_file in csv_files:
+        csv_data = parse_web_directory_csv(csv_file)
+        all_web_dirs.update(csv_data)
+
+    # Map repository URLs to node IDs and add to nodes_dict
+    count = 0
+
+    for node_id, node_data in nodes_dict.items():
+        repo = node_data.get('repository', '')
+        if not repo or repo == 'N/A':
+            continue
+
+        # Normalize repository URL for matching
+        # Handle various URL formats
+        repo_normalized = repo.lower().strip('/')
+        repo_normalized = repo_normalized.replace('https://github.com/', '')
+        repo_normalized = repo_normalized.replace('http://github.com/', '')
+        repo_normalized = repo_normalized.replace('.git', '')
+
+        # Check if this repo has web directories
+        for csv_repo, file_paths in all_web_dirs.items():
+            csv_repo_normalized = csv_repo.lower().strip('/')
+            csv_repo_normalized = csv_repo_normalized.replace('github.com/', '')
+
+            if csv_repo_normalized == repo_normalized:
+                node_data['_web_directories'] = sorted(list(file_paths))
+                count += 1
+                break
+
+    return count
+
+
+def parse_routes_csv(csv_file_path):
+    """
+    Parse a CSV file containing routes information.
+    Only tracks unique .py files per repository.
+
+    Args:
+        csv_file_path: Path to the CSV file
+
+    Returns:
+        Dictionary mapping repository URLs to set of unique file paths
+    """
+    routes = {}
+
+    try:
+        with open(csv_file_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            next(reader)  # Skip header
+
+            for row in reader:
+                if len(row) >= 4:
+                    repo_url = row[1]  # Column 2: Repository
+                    file_path = row[3]  # Column 4: File path
+
+                    # Only track .py files
+                    if file_path.endswith('.py'):
+                        if repo_url not in routes:
+                            routes[repo_url] = set()
+                        routes[repo_url].add(file_path)
+    except Exception as e:
+        print(f"Warning: Could not parse CSV {csv_file_path}: {e}")
+
+    return routes
+
+
+def load_routes_data(nodes_dict):
+    """
+    Load routes data from CSV files in route-any folder.
+    Maps repository URLs to node IDs and adds routes info directly to nodes_dict.
+
+    Args:
+        nodes_dict: Dictionary of all nodes (modified in place)
+
+    Returns:
+        Number of nodes with routes data
+    """
+    routes_path = Path('route-any')
+    if not routes_path.exists():
+        return 0
+
+    # Find all CSV files
+    csv_files = list(routes_path.glob('*.csv'))
+    if not csv_files:
+        return 0
+
+    # Parse all CSV files and collect routes data
+    all_routes = {}
+    for csv_file in csv_files:
+        csv_data = parse_routes_csv(csv_file)
+        all_routes.update(csv_data)
+
+    # Map repository URLs to node IDs and add to nodes_dict
+    count = 0
+
+    for node_id, node_data in nodes_dict.items():
+        repo = node_data.get('repository', '')
+        if not repo or repo == 'N/A':
+            continue
+
+        # Normalize repository URL for matching
+        # Handle various URL formats
+        repo_normalized = repo.lower().strip('/')
+        repo_normalized = repo_normalized.replace('https://github.com/', '')
+        repo_normalized = repo_normalized.replace('http://github.com/', '')
+        repo_normalized = repo_normalized.replace('.git', '')
+
+        # Check if this repo has routes
+        for csv_repo, file_paths in all_routes.items():
+            csv_repo_normalized = csv_repo.lower().strip('/')
+            csv_repo_normalized = csv_repo_normalized.replace('github.com/', '')
+
+            if csv_repo_normalized == repo_normalized:
+                node_data['_routes'] = sorted(list(file_paths))
+                count += 1
+                break
+
+    return count
+
+
 def load_all_cached_requirements(nodes_dict, original_deps_backup):
     """
     Load all cached requirements.txt files on startup.
@@ -1058,6 +1235,22 @@ def display_node_dependencies(nodes_dict, node_id, original_deps_backup=None):
 
         print(f"Latest Version: {version} | Released: {latest_date}")
 
+        # Display web directory information if available
+        web_dirs = node_data.get('_web_directories', [])
+        if web_dirs:
+            print(f"\nWeb Directories:")
+            print("-" * 60)
+            for file_path in web_dirs:
+                print(f"  - {file_path}")
+
+        # Display routes information if available
+        routes = node_data.get('_routes', [])
+        if routes:
+            print(f"\nRoutes:")
+            print("-" * 60)
+            for file_path in routes:
+                print(f"  - {file_path}")
+
         # Check if dependencies were updated from requirements.txt
         is_updated = latest_version_info.get('_updated_from_requirements', False)
         has_mismatch = False
@@ -1233,6 +1426,12 @@ def print_help():
     print("  &nodes - Filter by specific node IDs")
     print("         Comma-separated: &nodes id1,id2")
     print("         From file: &nodes file:nodelist.txt")
+    print("  &web-dir - Filter to nodes with web directories")
+    print("         Works with /nodes command")
+    print("         Example: /nodes &web-dir &top 20")
+    print("  &routes - Filter to nodes with routes")
+    print("         Works with /nodes command")
+    print("         Example: /nodes &routes &top 20")
     print("  &update-reqs - Fetch actual dependencies from requirements.txt")
     print("         Works with /nodes command and node searches")
     print("         Example: /nodes &top 10 &update-reqs")
@@ -1285,6 +1484,16 @@ def interactive_mode(nodes_dict):
     cached_count = load_all_cached_requirements(nodes_dict, original_deps_backup)
     if cached_count > 0:
         print(f"\n[Loaded {cached_count} cached requirements.txt files]")
+
+    # Load web directory data from CSV files
+    web_dir_count = load_web_directory_data(nodes_dict)
+    if web_dir_count > 0:
+        print(f"[Loaded web directory data for {web_dir_count} nodes]")
+
+    # Load routes data from CSV files
+    routes_count = load_routes_data(nodes_dict)
+    if routes_count > 0:
+        print(f"[Loaded routes data for {routes_count} nodes]")
 
     # Pre-compile all dependencies for quick lookup
     dep_analysis = compile_dependencies(nodes_dict)
@@ -1572,6 +1781,7 @@ def interactive_mode(nodes_dict):
                 show_all = False
                 top_n = None
                 update_reqs = False
+                web_dir_only = False
 
                 # Strip modifiers from node_search to get the actual node name
                 if '&update-reqs' in node_search.lower():
@@ -1585,6 +1795,15 @@ def interactive_mode(nodes_dict):
                 if '&all' in node_search.lower():
                     show_all = True
                     node_search = re.sub(r'&all', '', node_search, flags=re.IGNORECASE).strip()
+
+                if '&web-dir' in node_search.lower():
+                    web_dir_only = True
+                    node_search = re.sub(r'&web-dir', '', node_search, flags=re.IGNORECASE).strip()
+
+                routes_only = False
+                if '&routes' in node_search.lower():
+                    routes_only = True
+                    node_search = re.sub(r'&routes', '', node_search, flags=re.IGNORECASE).strip()
 
                 if '&top' in node_search.lower():
                     top_match = re.search(r'&top\s+(-?\d+)', node_search.lower())
@@ -1720,6 +1939,20 @@ def interactive_mode(nodes_dict):
                             working_nodes = dict(sorted_nodes[top_n:])
                             print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
 
+                # Filter by web directories if requested
+                if '&web-dir' in query.lower():
+                    web_dir_nodes = {node_id: node_data for node_id, node_data in working_nodes.items()
+                                    if node_data.get('_web_directories')}
+                    working_nodes = web_dir_nodes
+                    print(f"\n[Filtering to nodes with web directories: {len(working_nodes)} nodes]")
+
+                # Filter by routes if requested
+                if '&routes' in query.lower():
+                    routes_nodes = {node_id: node_data for node_id, node_data in working_nodes.items()
+                                   if node_data.get('_routes')}
+                    working_nodes = routes_nodes
+                    print(f"\n[Filtering to nodes with routes: {len(working_nodes)} nodes]")
+
                 # Handle &update-reqs modifier
                 if '&update-reqs' in query.lower():
                     node_ids = list(working_nodes.keys())
@@ -1798,11 +2031,17 @@ def interactive_mode(nodes_dict):
                             if set(original_deps) != set(current_deps):
                                 has_mismatch = True
 
+                    # Check if node has web directory
+                    has_web_dir = bool(node_data.get('_web_directories'))
+                    has_routes = bool(node_data.get('_routes'))
+
                     # Format output
                     rank = full_rank_map.get(node_id, 'N/A')
                     asterisk = "*" if has_mismatch else ""
+                    web_indicator = " | Web: Yes" if has_web_dir else ""
+                    routes_indicator = " | Routes: Yes" if has_routes else ""
                     output_lines.append(f"\n{i}. {name} ({node_id})")
-                    output_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}")
+                    output_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{web_indicator}{routes_indicator}")
                     output_lines.append(f"   Latest: {latest_date} | Version: {version}")
                     if len(description) > 100:
                         output_lines.append(f"   Description: {description[:100]}...")
@@ -1864,10 +2103,16 @@ def interactive_mode(nodes_dict):
                                 if set(original_deps) != set(current_deps):
                                     has_mismatch = True
 
+                        # Check if node has web directory
+                        has_web_dir = bool(node_data.get('_web_directories'))
+                        has_routes = bool(node_data.get('_routes'))
+
                         rank = full_rank_map.get(node_id, 'N/A')
                         asterisk = "*" if has_mismatch else ""
+                        web_indicator = " | Web: Yes" if has_web_dir else ""
+                        routes_indicator = " | Routes: Yes" if has_routes else ""
                         save_lines.append(f"\n{i}. {name} ({node_id})")
-                        save_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}")
+                        save_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{web_indicator}{routes_indicator}")
                         save_lines.append(f"   Latest: {latest_date} | Version: {version}")
                         save_lines.append(f"   Description: {description}")
                         save_lines.append(f"   Repository: {repo}")
@@ -2181,6 +2426,56 @@ def display_summary(nodes_dict):
                 print(f"    Git dep: {git_dep}")
             if len(node_info['git_deps']) > 2:
                 print(f"      ... and {len(node_info['git_deps']) - 2} more git dependencies")
+
+    # Web directory statistics
+    nodes_with_web_dirs = []
+
+    for node_id, node_data in nodes_dict.items():
+        web_dirs = node_data.get('_web_directories', [])
+        if web_dirs:
+            nodes_with_web_dirs.append({
+                'id': node_id,
+                'name': node_data.get('name', 'N/A'),
+                'files': web_dirs,
+                'downloads': node_data.get('downloads', 0)
+            })
+
+    if nodes_with_web_dirs:
+        # Sort by downloads for examples
+        nodes_with_web_dirs.sort(key=lambda x: x['downloads'], reverse=True)
+
+        print(f"\n\nWeb Directories: {len(nodes_with_web_dirs)} nodes")
+        print("  These nodes have .py files with WEB_DIRECTORY variable")
+
+        print(f"\n  Example nodes with web directories:")
+        for node_info in nodes_with_web_dirs[:5]:
+            print(f"\n    Node: {node_info['name']} ({node_info['id']})")
+            print(f"    Files: {', '.join(node_info['files'])}")
+
+    # Routes statistics
+    nodes_with_routes = []
+
+    for node_id, node_data in nodes_dict.items():
+        routes = node_data.get('_routes', [])
+        if routes:
+            nodes_with_routes.append({
+                'id': node_id,
+                'name': node_data.get('name', 'N/A'),
+                'files': routes,
+                'downloads': node_data.get('downloads', 0)
+            })
+
+    if nodes_with_routes:
+        # Sort by downloads for examples
+        nodes_with_routes.sort(key=lambda x: x['downloads'], reverse=True)
+
+        print(f"\n\nRoutes: {len(nodes_with_routes)} nodes")
+        print("  These nodes have .py files with route-any decorator")
+
+        print(f"\n  Example nodes with routes:")
+        for node_info in nodes_with_routes[:5]:
+            print(f"\n    Node: {node_info['name']} ({node_info['id']})")
+            print(f"    Files: {', '.join(node_info['files'])}")
 
 
 def main():
