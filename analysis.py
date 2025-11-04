@@ -674,13 +674,356 @@ def format_dependency_details(result, show_all_nodes=False):
     return '\n'.join(lines)
 
 
-def display_node_dependencies(nodes_dict, node_id):
+def get_raw_file_url(repo_url, filename='requirements.txt'):
+    """
+    Convert a GitHub repository URL to a raw file URL.
+
+    Args:
+        repo_url: Repository URL (e.g., https://github.com/user/repo)
+        filename: Name of the file to fetch (default: requirements.txt)
+
+    Returns:
+        List of raw file URLs to try, or None if URL format is not recognized
+    """
+    if not repo_url or repo_url == 'N/A':
+        return None
+
+    # Remove trailing slash and .git
+    repo_url = repo_url.rstrip('/').rstrip('.git')
+
+    # Handle GitHub URLs
+    if 'github.com' in repo_url:
+        # Convert https://github.com/user/repo to https://raw.githubusercontent.com/user/repo/main/requirements.txt
+        parts = repo_url.replace('https://github.com/', '').replace('http://github.com/', '')
+        # Try main branch first, then master
+        return [
+            f"https://raw.githubusercontent.com/{parts}/main/{filename}",
+            f"https://raw.githubusercontent.com/{parts}/master/{filename}"
+        ]
+
+    return None
+
+
+def fetch_requirements_txt(repo_url, timeout=10):
+    """
+    Fetch requirements.txt content from a repository.
+
+    Args:
+        repo_url: Repository URL
+        timeout: Request timeout in seconds
+
+    Returns:
+        Tuple of (success, content, error_message)
+    """
+    raw_urls = get_raw_file_url(repo_url)
+
+    if not raw_urls:
+        return (False, None, "Unsupported repository host")
+
+    # Try each URL (main and master branches)
+    for raw_url in raw_urls:
+        try:
+            response = requests.get(raw_url, timeout=timeout)
+            if response.status_code == 200:
+                return (True, response.text, None)
+        except requests.exceptions.Timeout:
+            continue
+        except requests.exceptions.RequestException as e:
+            continue
+
+    return (False, None, "requirements.txt not found")
+
+
+def parse_requirements_txt(content):
+    """
+    Parse requirements.txt content into a list of dependencies.
+
+    Args:
+        content: Content of requirements.txt file
+
+    Returns:
+        List of dependency strings
+    """
+    if not content:
+        return []
+
+    dependencies = []
+    for line in content.split('\n'):
+        line = line.strip()
+
+        # Skip empty lines and comments
+        if not line or line.startswith('#'):
+            continue
+
+        # Skip editable installs (-e)
+        if line.startswith('-e '):
+            continue
+
+        # Include pip commands (--extra-index-url, etc.)
+        # Include all other dependencies
+        dependencies.append(line)
+
+    return dependencies
+
+
+def save_requirements_cache(node_id, content):
+    """
+    Save requirements.txt content to cache directory.
+
+    Args:
+        node_id: ID of the node
+        content: Requirements.txt content to save
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        cache_dir = Path('updated_reqs') / node_id
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        cache_file = cache_dir / 'requirements.txt'
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        return True
+    except Exception as e:
+        print(f"Warning: Could not cache requirements for {node_id}: {e}")
+        return False
+
+
+def load_requirements_cache(node_id):
+    """
+    Load cached requirements.txt content.
+
+    Args:
+        node_id: ID of the node
+
+    Returns:
+        Tuple of (success, content)
+    """
+    try:
+        cache_file = Path('updated_reqs') / node_id / 'requirements.txt'
+        if cache_file.exists():
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return (True, content)
+    except Exception as e:
+        pass
+
+    return (False, None)
+
+
+def delete_requirements_cache(node_id):
+    """
+    Delete cached requirements.txt for a node.
+
+    Args:
+        node_id: ID of the node
+
+    Returns:
+        True if deleted, False otherwise
+    """
+    try:
+        cache_file = Path('updated_reqs') / node_id / 'requirements.txt'
+        if cache_file.exists():
+            cache_file.unlink()
+            # Try to remove the directory if it's now empty
+            try:
+                cache_file.parent.rmdir()
+            except:
+                pass  # Directory not empty or other error
+            return True
+    except Exception as e:
+        pass
+
+    return False
+
+
+def load_all_cached_requirements(nodes_dict, original_deps_backup):
+    """
+    Load all cached requirements.txt files on startup.
+
+    Args:
+        nodes_dict: Dictionary of nodes (will be modified in-place)
+        original_deps_backup: Dictionary to store original dependencies
+
+    Returns:
+        Number of nodes updated from cache
+    """
+    cache_dir = Path('updated_reqs')
+    if not cache_dir.exists():
+        return 0
+
+    count = 0
+    for node_dir in cache_dir.iterdir():
+        if node_dir.is_dir():
+            node_id = node_dir.name
+            if node_id in nodes_dict:
+                success, content = load_requirements_cache(node_id)
+                if success:
+                    # Parse and update dependencies
+                    new_deps = parse_requirements_txt(content)
+
+                    # Backup original if not already backed up
+                    if node_id not in original_deps_backup:
+                        node_data = nodes_dict[node_id]
+                        if 'latest_version' in node_data and node_data['latest_version']:
+                            original_deps_backup[node_id] = {
+                                'dependencies': node_data['latest_version'].get('dependencies', []).copy() if node_data['latest_version'].get('dependencies') else []
+                            }
+
+                    # Update dependencies
+                    node_data = nodes_dict[node_id]
+                    if 'latest_version' in node_data and node_data['latest_version']:
+                        node_data['latest_version']['dependencies'] = new_deps
+                        node_data['latest_version']['_updated_from_requirements'] = True
+                        count += 1
+
+    return count
+
+
+def fetch_single_node_requirements(node_id, repo):
+    """
+    Fetch requirements.txt for a single node.
+
+    Args:
+        node_id: ID of the node
+        repo: Repository URL
+
+    Returns:
+        Tuple of (node_id, success, content, error)
+    """
+    success, content, error = fetch_requirements_txt(repo)
+    return (node_id, success, content, error)
+
+
+def update_node_requirements(nodes_dict, node_ids, original_deps_backup, max_workers=20):
+    """
+    Fetch and update node dependencies from requirements.txt files concurrently.
+
+    Args:
+        nodes_dict: Dictionary of nodes (will be modified in-place)
+        node_ids: List of node IDs to update
+        original_deps_backup: Dictionary to store original dependencies
+        max_workers: Maximum number of concurrent threads (default: 20)
+
+    Returns:
+        Dictionary with update statistics
+    """
+    stats = {
+        'total': len(node_ids),
+        'success': 0,
+        'failed': 0,
+        'unsupported': 0,
+        'updated_nodes': []
+    }
+
+    # Thread-safe lock for printing and stats updates
+    print_lock = threading.Lock()
+
+    # Capture original dependencies BEFORE fetching (since we update in-place)
+    original_json_deps = {}
+    for node_id in node_ids:
+        if node_id in nodes_dict:
+            node_data = nodes_dict[node_id]
+            if 'latest_version' in node_data and node_data['latest_version']:
+                deps = node_data['latest_version'].get('dependencies', []) or []
+                original_json_deps[node_id] = deps.copy() if deps else []
+            else:
+                original_json_deps[node_id] = []
+
+    # Prepare fetch tasks
+    fetch_tasks = []
+    for node_id in node_ids:
+        if node_id not in nodes_dict:
+            with print_lock:
+                stats['failed'] += 1
+            continue
+
+        node_data = nodes_dict[node_id]
+        repo = node_data.get('repository', 'N/A')
+        fetch_tasks.append((node_id, repo))
+
+    # Fetch concurrently
+    completed = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_node = {
+            executor.submit(fetch_single_node_requirements, node_id, repo): node_id
+            for node_id, repo in fetch_tasks
+        }
+
+        # Process results as they complete
+        for future in concurrent.futures.as_completed(future_to_node):
+            node_id, success, content, error = future.result()
+            completed += 1
+
+            with print_lock:
+                print(f"[{completed}/{stats['total']}] {node_id}...", end=' ')
+
+                # Get original dependencies from captured snapshot (before any updates)
+                original_deps = original_json_deps.get(node_id, [])
+                node_data = nodes_dict[node_id]
+
+                if success or error == "requirements.txt not found":
+                    # Parse dependencies (empty list if no file)
+                    if success:
+                        new_deps = parse_requirements_txt(content)
+                        # Save to cache for next startup
+                        save_requirements_cache(node_id, content)
+                    else:
+                        # No requirements.txt found - that's OK, means no dependencies
+                        new_deps = []
+                        # Delete stale cache if it exists
+                        delete_requirements_cache(node_id)
+
+                    # Backup original dependencies if not already backed up
+                    # Use the captured snapshot, not current node_data (which may be updated)
+                    if node_id not in original_deps_backup:
+                        original_deps_backup[node_id] = {
+                            'dependencies': original_deps.copy() if original_deps else []
+                        }
+
+                    # Update the node's dependencies in-place
+                    if 'latest_version' in node_data and node_data['latest_version']:
+                        node_data['latest_version']['dependencies'] = new_deps
+                        node_data['latest_version']['_updated_from_requirements'] = True
+
+                    stats['success'] += 1
+                    stats['updated_nodes'].append(node_id)
+
+                    # Compare with original to show if they match
+                    if set(original_deps) == set(new_deps):
+                        print(f"OK ({len(new_deps)} deps) [matches JSON]")
+                    else:
+                        if len(original_deps) == 0 and len(new_deps) == 0:
+                            print(f"OK ({len(new_deps)} deps) [matches JSON]")
+                        elif len(original_deps) == 0:
+                            print(f"OK ({len(new_deps)} deps) [JSON had none]")
+                        elif len(new_deps) == 0:
+                            print(f"OK ({len(new_deps)} deps) [JSON had {len(original_deps)}]")
+                        else:
+                            print(f"OK ({len(new_deps)} deps) [differs from JSON: {len(original_deps)}]")
+                else:
+                    # Actual errors (network issues, unsupported hosts, etc.)
+                    if error == "Unsupported repository host":
+                        stats['unsupported'] += 1
+                        print(f"SKIP {error}")
+                    else:
+                        print(f"FAIL {error}")
+                    stats['failed'] += 1
+
+    return stats
+
+
+def display_node_dependencies(nodes_dict, node_id, original_deps_backup=None):
     """
     Display detailed dependency information for a specific node.
 
     Args:
         nodes_dict: Dictionary of all nodes
         node_id: ID of the node to display
+        original_deps_backup: Dictionary with original dependencies (if updated)
     """
     node_data = nodes_dict[node_id]
 
@@ -714,6 +1057,34 @@ def display_node_dependencies(nodes_dict, node_id):
             latest_date = date_str[:10] if date_str else 'N/A'
 
         print(f"Latest Version: {version} | Released: {latest_date}")
+
+        # Check if dependencies were updated from requirements.txt
+        is_updated = latest_version_info.get('_updated_from_requirements', False)
+        has_mismatch = False
+
+        if is_updated:
+            print(f"\n[Dependencies updated from requirements.txt]")
+
+            # Check for mismatch with original JSON dependencies
+            if original_deps_backup and node_id in original_deps_backup:
+                original_deps = original_deps_backup[node_id].get('dependencies', [])
+                current_deps = latest_version_info.get('dependencies', []) or []
+
+                # Compare using sets to ignore order
+                if set(original_deps) != set(current_deps):
+                    has_mismatch = True
+                    orig_count = len(original_deps)
+                    curr_count = len(current_deps)
+
+                    if orig_count == 0 and curr_count > 0:
+                        print(f"[MISMATCH: JSON had no dependencies, requirements.txt has {curr_count}]")
+                    elif orig_count > 0 and curr_count == 0:
+                        print(f"[MISMATCH: JSON had {orig_count} dependencies, requirements.txt has none]")
+                    elif orig_count != curr_count:
+                        print(f"[MISMATCH: JSON had {orig_count} dependencies, requirements.txt has {curr_count}]")
+                    else:
+                        # Same count but different deps
+                        print(f"[MISMATCH: Different dependencies (both have {orig_count})]")
 
         # Parse dependencies
         if 'dependencies' in latest_version_info and latest_version_info['dependencies']:
@@ -843,6 +1214,7 @@ def print_help():
     print("  /top   - Show the most common dependencies")
     print("  /nodes - Show details about nodes (sorted by downloads)")
     print("  /nodes <node_id> - Show detailed dependency info for a specific node")
+    print("  /nodes <search>! - Auto-select first matching node (fuzzy search)")
     print("  /update - Fetch latest nodes from registry and update nodes.json")
     print("  /graph - Create cumulative dependencies visualization")
     print("  /graph downloads - Create total downloads visualization (linear scale)")
@@ -861,6 +1233,9 @@ def print_help():
     print("  &nodes - Filter by specific node IDs")
     print("         Comma-separated: &nodes id1,id2")
     print("         From file: &nodes file:nodelist.txt")
+    print("  &update-reqs - Fetch actual dependencies from requirements.txt")
+    print("         Works with /nodes command and node searches")
+    print("         Example: /nodes &top 10 &update-reqs")
     print("  Combine: numpy &top 50 &save")
     print("\nOr type a dependency name directly (e.g., numpy, torch)")
 
@@ -902,6 +1277,14 @@ def interactive_mode(nodes_dict):
 
     # Print help information
     print_help()
+
+    # Dictionary to store original dependencies when updated from requirements.txt
+    original_deps_backup = {}
+
+    # Load cached requirements.txt files from previous sessions
+    cached_count = load_all_cached_requirements(nodes_dict, original_deps_backup)
+    if cached_count > 0:
+        print(f"\n[Loaded {cached_count} cached requirements.txt files]")
 
     # Pre-compile all dependencies for quick lookup
     dep_analysis = compile_dependencies(nodes_dict)
@@ -1188,8 +1571,13 @@ def interactive_mode(nodes_dict):
                 save_results = False
                 show_all = False
                 top_n = None
+                update_reqs = False
 
                 # Strip modifiers from node_search to get the actual node name
+                if '&update-reqs' in node_search.lower():
+                    update_reqs = True
+                    node_search = re.sub(r'&update-reqs', '', node_search, flags=re.IGNORECASE).strip()
+
                 if '&save' in node_search.lower():
                     save_results = True
                     node_search = re.sub(r'&save', '', node_search, flags=re.IGNORECASE).strip()
@@ -1210,63 +1598,96 @@ def interactive_mode(nodes_dict):
 
                 # If there's a node name/ID remaining after stripping modifiers, search for it
                 if node_search:
+                    # Check if search ends with ! (auto-select first match)
+                    auto_select_first = node_search.endswith('!')
+                    if auto_select_first:
+                        node_search = node_search[:-1].strip()  # Remove the !
+
                     node_search_lower = node_search.lower()
+
+                    # If &update-reqs is specified, update dependencies first
+                    if update_reqs:
+                        # Determine which node(s) to update
+                        node_to_update = None
+                        if node_search_lower in nodes_dict:
+                            node_to_update = node_search_lower
+                        elif node_search in nodes_dict:
+                            node_to_update = node_search
+
+                        if node_to_update:
+                            print(f"\nUpdating dependencies for {node_to_update}...")
+                            update_node_requirements(nodes_dict, [node_to_update], original_deps_backup)
+                            print()
 
                     # Try exact match first (case-insensitive)
                     if node_search_lower in nodes_dict:
-                        display_node_dependencies(nodes_dict, node_search_lower)
+                        display_node_dependencies(nodes_dict, node_search_lower, original_deps_backup)
                     elif node_search in nodes_dict:
-                        display_node_dependencies(nodes_dict, node_search)
+                        display_node_dependencies(nodes_dict, node_search, original_deps_backup)
                     else:
                         # Try to find nodes that start with the search string
                         starts_with_matches = [node_id for node_id in nodes_dict.keys()
                                               if node_id.lower().startswith(node_search_lower)]
 
                         if starts_with_matches:
-                            print(f"\nNo exact match for '{node_search}'. Found {len(starts_with_matches)} nodes starting with '{node_search}':\n")
-
                             # Sort by downloads
                             starts_with_sorted = sorted(starts_with_matches,
                                                        key=lambda x: nodes_dict[x].get('downloads', 0),
                                                        reverse=True)
 
-                            # Show up to 20 matches
-                            show_limit = min(len(starts_with_sorted), 20)
+                            # Auto-select first match if ! was used
+                            if auto_select_first:
+                                selected_node = starts_with_sorted[0]
+                                print(f"\n[Auto-selected: {selected_node}]")
+                                display_node_dependencies(nodes_dict, selected_node, original_deps_backup)
+                            else:
+                                print(f"\nNo exact match for '{node_search}'. Found {len(starts_with_matches)} nodes starting with '{node_search}':\n")
 
-                            for i, node_id in enumerate(starts_with_sorted[:show_limit], 1):
-                                node = nodes_dict[node_id]
-                                name = node.get('name', 'N/A')
-                                downloads = node.get('downloads', 0)
-                                print(f"  {i}. {node_id:40} - {name} ({downloads:,} downloads)")
+                                # Show up to 20 matches
+                                show_limit = min(len(starts_with_sorted), 20)
 
-                            if len(starts_with_sorted) > show_limit:
-                                print(f"\n  ... and {len(starts_with_sorted) - show_limit} more nodes")
+                                for i, node_id in enumerate(starts_with_sorted[:show_limit], 1):
+                                    node = nodes_dict[node_id]
+                                    name = node.get('name', 'N/A')
+                                    downloads = node.get('downloads', 0)
+                                    print(f"  {i}. {node_id:40} - {name} ({downloads:,} downloads)")
 
-                            print(f"\nTo see details for a specific node, type: /nodes <node_id>")
+                                if len(starts_with_sorted) > show_limit:
+                                    print(f"\n  ... and {len(starts_with_sorted) - show_limit} more nodes")
+
+                                print(f"\nTo see details for a specific node, type: /nodes <node_id>")
+                                print(f"Or use /nodes {node_search}! to auto-select the first match")
                         else:
                             # Try substring match
                             partial_matches = [node_id for node_id in nodes_dict.keys()
                                              if node_search_lower in node_id.lower()]
 
                             if partial_matches:
-                                print(f"\nNo nodes starting with '{node_search}'. Found {len(partial_matches)} containing '{node_search}':\n")
-
                                 # Sort by downloads
                                 partial_sorted = sorted(partial_matches,
                                                        key=lambda x: nodes_dict[x].get('downloads', 0),
                                                        reverse=True)
 
-                                # Show up to 10 matches
-                                for i, node_id in enumerate(partial_sorted[:10], 1):
-                                    node = nodes_dict[node_id]
-                                    name = node.get('name', 'N/A')
-                                    downloads = node.get('downloads', 0)
-                                    print(f"  {i}. {node_id:40} - {name} ({downloads:,} downloads)")
+                                # Auto-select first match if ! was used
+                                if auto_select_first:
+                                    selected_node = partial_sorted[0]
+                                    print(f"\n[Auto-selected: {selected_node}]")
+                                    display_node_dependencies(nodes_dict, selected_node, original_deps_backup)
+                                else:
+                                    print(f"\nNo nodes starting with '{node_search}'. Found {len(partial_matches)} containing '{node_search}':\n")
 
-                                if len(partial_matches) > 10:
-                                    print(f"\n  ... and {len(partial_matches) - 10} more matches")
+                                    # Show up to 10 matches
+                                    for i, node_id in enumerate(partial_sorted[:10], 1):
+                                        node = nodes_dict[node_id]
+                                        name = node.get('name', 'N/A')
+                                        downloads = node.get('downloads', 0)
+                                        print(f"  {i}. {node_id:40} - {name} ({downloads:,} downloads)")
 
-                                print(f"\nTo see details for a specific node, type: /nodes <node_id>")
+                                    if len(partial_matches) > 10:
+                                        print(f"\n  ... and {len(partial_matches) - 10} more matches")
+
+                                    print(f"\nTo see details for a specific node, type: /nodes <node_id>")
+                                    print(f"Or use /nodes {node_search}! to auto-select the first match")
                             else:
                                 print(f"\nNo node found matching '{node_search}'")
                                 print("Use /nodes to see all available nodes")
@@ -1298,6 +1719,25 @@ def interactive_mode(nodes_dict):
                             # Negative number means bottom N nodes
                             working_nodes = dict(sorted_nodes[top_n:])
                             print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
+
+                # Handle &update-reqs modifier
+                if '&update-reqs' in query.lower():
+                    node_ids = list(working_nodes.keys())
+                    print(f"\nUpdating requirements for {len(node_ids)} nodes...")
+                    print("="*60)
+                    stats = update_node_requirements(nodes_dict, node_ids, original_deps_backup)
+                    print("="*60)
+                    print(f"\nUpdate Summary:")
+                    print(f"  Total: {stats['total']}")
+                    print(f"  Success: {stats['success']}")
+                    print(f"  Failed: {stats['failed']}")
+                    if stats['unsupported'] > 0:
+                        print(f"    - Unsupported host: {stats['unsupported']}")
+                    print()
+
+                    # Recompile dependencies after update
+                    dep_analysis = compile_dependencies(nodes_dict)
+                    all_deps_lower = {dep.lower(): dep for dep in dep_analysis['unique_base_dependencies']}
 
                 # Calculate ranks for ALL nodes (not just working_nodes)
                 full_rank_map = calculate_node_ranks(nodes_dict)
@@ -1349,10 +1789,20 @@ def interactive_mode(nodes_dict):
                                 # Count only active dependencies (not commented or pip commands)
                                 dep_count = sum(1 for d in deps if not str(d).strip().startswith('#') and not str(d).strip().startswith('--'))
 
+                    # Check for mismatch with original JSON
+                    has_mismatch = False
+                    if latest_version_info and latest_version_info.get('_updated_from_requirements', False):
+                        if original_deps_backup and node_id in original_deps_backup:
+                            original_deps = original_deps_backup[node_id].get('dependencies', [])
+                            current_deps = latest_version_info.get('dependencies', []) or []
+                            if set(original_deps) != set(current_deps):
+                                has_mismatch = True
+
                     # Format output
                     rank = full_rank_map.get(node_id, 'N/A')
+                    asterisk = "*" if has_mismatch else ""
                     output_lines.append(f"\n{i}. {name} ({node_id})")
-                    output_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}")
+                    output_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}")
                     output_lines.append(f"   Latest: {latest_date} | Version: {version}")
                     if len(description) > 100:
                         output_lines.append(f"   Description: {description[:100]}...")
@@ -1405,9 +1855,19 @@ def interactive_mode(nodes_dict):
                                 if deps and isinstance(deps, list):
                                     dep_count = sum(1 for d in deps if not str(d).strip().startswith('#') and not str(d).strip().startswith('--'))
 
+                        # Check for mismatch with original JSON
+                        has_mismatch = False
+                        if latest_version_info and latest_version_info.get('_updated_from_requirements', False):
+                            if original_deps_backup and node_id in original_deps_backup:
+                                original_deps = original_deps_backup[node_id].get('dependencies', [])
+                                current_deps = latest_version_info.get('dependencies', []) or []
+                                if set(original_deps) != set(current_deps):
+                                    has_mismatch = True
+
                         rank = full_rank_map.get(node_id, 'N/A')
+                        asterisk = "*" if has_mismatch else ""
                         save_lines.append(f"\n{i}. {name} ({node_id})")
-                        save_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}")
+                        save_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}")
                         save_lines.append(f"   Latest: {latest_date} | Version: {version}")
                         save_lines.append(f"   Description: {description}")
                         save_lines.append(f"   Repository: {repo}")

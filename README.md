@@ -111,6 +111,8 @@ Show detailed information about nodes, sorted by downloads.
 ```bash
 > /nodes comfyui-kjnodes          # Show detailed dependency info for a specific node
 > /nodes comfy                    # Fuzzy search - shows matching nodes
+> /nodes comfy!                   # Auto-select first match (no list)
+> /nodes kjnodes!                 # Quickly jump to first matching node
 ```
 
 When you specify a node ID after `/nodes`, it displays:
@@ -120,6 +122,25 @@ When you specify a node ID after `/nodes`, it displays:
 - Git-based dependencies (if any)
 - Pip command flags (if any)
 - Commented-out dependencies (if any)
+
+**Quick match with `!`:**
+Add `!` to the end of your search to automatically select the first matching node instead of showing a list. The search will try exact match first, then "starts with", then "contains". The first match by downloads is selected.
+
+**Update dependencies from requirements.txt:**
+
+The node registry data may have incomplete or outdated dependency information. Use `&update-reqs` to fetch actual dependencies from the repository's requirements.txt file:
+
+```bash
+> /nodes comfyui-kjnodes &update-reqs   # Update single node
+> /nodes &top 10 &update-reqs           # Update top 10 nodes
+> /nodes &all &update-reqs              # Update all nodes (may take a while!)
+```
+
+- Fetches requirements.txt from GitHub repositories
+- Updates dependencies in-place for analysis
+- Original dependencies from nodes.json are backed up
+- Works with all modifiers (&top, &nodes, etc.)
+- Updated dependencies persist for the current session
 
 ### `/update`
 Fetch the latest nodes data from the ComfyUI registry and update the local `nodes.json` file.
@@ -230,6 +251,19 @@ Filter results to only include specific nodes by their IDs.
 
 The file should contain one node ID per line.
 
+### `&update-reqs`
+Fetch actual dependencies from requirements.txt files in repositories. Only works with `/nodes` command.
+
+```bash
+> /nodes comfyui-kjnodes &update-reqs      # Update single node
+> /nodes &top 10 &update-reqs              # Update top 10 nodes
+```
+
+- Updates dependencies in-place for current session
+- Original dependencies are backed up
+- Supports GitHub repositories
+- Can be combined with other modifiers
+
 ## Dependency Searches
 
 Search for specific dependencies by typing their name directly.
@@ -295,6 +329,13 @@ python analysis.py -e "//graph downloads log indicators &save" # Log scale with 
 ### View dependency information for a specific node
 ```bash
 python analysis.py -e "//nodes comfyui-kjnodes"
+python analysis.py -e "//nodes comfyui-kjnodes &update-reqs"  # With actual requirements.txt
+python analysis.py -e "//nodes kjnodes!"                      # Auto-select first match
+```
+
+### Update dependencies from requirements.txt for top nodes
+```bash
+python analysis.py -e "//nodes &top 20 &update-reqs"
 ```
 
 ### Interactive session workflow
@@ -307,6 +348,9 @@ $ python analysis.py
 > /list &dupes       # Check for version conflicts
 > /nodes &top 10     # See top 10 nodes by downloads
 > /nodes comfyui-kjnodes  # View detailed deps for a specific node
+> /nodes kjnodes!    # Quick jump to first matching node
+> /nodes comfyui-kjnodes &update-reqs  # Update deps from requirements.txt
+> /nodes &top 5 &update-reqs  # Update top 5 nodes with actual requirements
 > /graph             # View cumulative dependencies graph
 > /graph downloads log  # View downloads with log scale
 > numpy &nodes comfyui-kjnodes,rgthree-comfy  # Check numpy in specific nodes
