@@ -99,12 +99,27 @@ Show detailed information about nodes, sorted by downloads.
 - Shows latest version and release date
 - Includes repository URL and description
 
+**List nodes:**
 ```bash
 > /nodes              # Show top 20 nodes
 > /nodes &all         # Show all nodes
 > /nodes &top 50      # Show top 50 nodes
 > /nodes &top -5      # Show bottom 5 nodes
 ```
+
+**View specific node details:**
+```bash
+> /nodes comfyui-kjnodes          # Show detailed dependency info for a specific node
+> /nodes comfy                    # Fuzzy search - shows matching nodes
+```
+
+When you specify a node ID after `/nodes`, it displays:
+- Node metadata (name, rank, downloads, stars, repository)
+- Latest version and release date
+- Complete list of active dependencies
+- Git-based dependencies (if any)
+- Pip command flags (if any)
+- Commented-out dependencies (if any)
 
 ### `/update`
 Fetch the latest nodes data from the ComfyUI registry and update the local `nodes.json` file.
@@ -277,6 +292,11 @@ python analysis.py -e "//graph downloads indicators"          # Downloads with p
 python analysis.py -e "//graph downloads log indicators &save" # Log scale with indicators, saved
 ```
 
+### View dependency information for a specific node
+```bash
+python analysis.py -e "//nodes comfyui-kjnodes"
+```
+
 ### Interactive session workflow
 ```bash
 $ python analysis.py
@@ -286,6 +306,7 @@ $ python analysis.py
 > torch* &all        # See all torch-related packages
 > /list &dupes       # Check for version conflicts
 > /nodes &top 10     # See top 10 nodes by downloads
+> /nodes comfyui-kjnodes  # View detailed deps for a specific node
 > /graph             # View cumulative dependencies graph
 > /graph downloads log  # View downloads with log scale
 > numpy &nodes comfyui-kjnodes,rgthree-comfy  # Check numpy in specific nodes
