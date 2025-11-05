@@ -1,0 +1,9 @@
+numpy
+torch
+pandas
+pillow
+pyvips
+gpustat
+google-genai
+vertexai
+typing-extensions

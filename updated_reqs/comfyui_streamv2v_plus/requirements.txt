@@ -1,0 +1,4 @@
+einops
+av
+peft
+fire

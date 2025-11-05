@@ -1,0 +1,2 @@
+deepface==0.0.89
+tf_keras

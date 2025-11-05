@@ -1,0 +1,7 @@
+diffusers
+transformers
+sentencepiece
+einops
+protobuf
+timm
+git+https://github.com/ToTheBeginning/facexlib.git

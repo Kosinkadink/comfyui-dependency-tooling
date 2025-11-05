@@ -1,0 +1,7 @@
+py-cpuinfo
+gitpython
+moviepy
+opencv-python
+scikit-build
+typing
+diskcache

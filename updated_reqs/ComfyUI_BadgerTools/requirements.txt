@@ -1,0 +1,10 @@
+moviepy
+numpy
+open_clip_torch
+opencv_contrib_python
+opencv_python
+opencv_python_headless
+Pillow
+Requests
+sentence_transformers
+scikit-image

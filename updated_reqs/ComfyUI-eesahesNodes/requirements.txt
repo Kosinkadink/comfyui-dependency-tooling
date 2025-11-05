@@ -1,0 +1,2 @@
+diffusers>=0.30.0
+einops>=0.7.0

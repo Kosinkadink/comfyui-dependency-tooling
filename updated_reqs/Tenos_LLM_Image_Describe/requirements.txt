@@ -1,0 +1,5 @@
+# requirements.txt for Tenosai LLM Image Describe CLIP Loader nodes
+requests
+openai
+google-generativeai
+groq

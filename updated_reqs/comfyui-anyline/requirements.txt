@@ -1,0 +1,3 @@
+pathlib
+huggingface_hub
+scikit-image

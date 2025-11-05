@@ -1,0 +1,4 @@
+asyncio
+autogen-core
+autogen-ext[openai]
+autogen-agentchat

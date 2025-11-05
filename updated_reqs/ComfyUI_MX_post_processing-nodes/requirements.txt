@@ -1,0 +1,6 @@
+torch
+torchvision
+numpy
+Pillow
+color-matcher
+opencv-python

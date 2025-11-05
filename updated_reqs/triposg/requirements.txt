@@ -1,0 +1,11 @@
+torch>=2.0.0
+trimesh
+diffusers>=0.31.0
+accelerate
+huggingface_hub
+opencv-python
+transformers
+scikit-image
+numpy
+tqdm
+peft

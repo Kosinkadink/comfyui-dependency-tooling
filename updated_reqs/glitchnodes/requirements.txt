@@ -1,0 +1,5 @@
+numpy
+torch
+tqdm
+Pillow
+opencv-python

@@ -1,0 +1,9 @@
+Pillow
+tqdm
+aiohttp
+filetype
+websockets<15.0.0
+aiohttp-cors
+requests
+numpy
+piexif

@@ -1,0 +1,4 @@
+torch
+torchaudio
+numpy
+seconohe>=1.0.2

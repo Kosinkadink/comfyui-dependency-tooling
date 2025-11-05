@@ -1,0 +1,5 @@
+# ComfyUI-Pollinations Dependencies
+# Minimal requirements - ComfyUI provides torch, numpy, etc.
+
+requests>=2.25.1
+pydub>=0.25.1

@@ -1,0 +1,5 @@
+spaces
+peft
+diffusers
+opencv-python
+omegaconf

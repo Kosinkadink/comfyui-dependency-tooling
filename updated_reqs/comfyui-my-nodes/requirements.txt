@@ -1,0 +1,9 @@
+dashscope>=1.23.1
+openai
+requests
+soundfile
+numpy
+urllib3==1.26.20
+
+
+#可选 oss2

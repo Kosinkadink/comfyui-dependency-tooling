@@ -1,0 +1,15 @@
+numpy
+fsspec
+matplotlib
+requests
+omegaconf
+transformers
+pytorch-lightning
+packaging
+regex
+ftfy
+tqdm
+sentencepiece
+protobuf
+pyyaml
+huggingface_hub

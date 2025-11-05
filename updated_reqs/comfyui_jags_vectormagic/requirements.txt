@@ -1,0 +1,11 @@
+librosa
+numpy
+Pillow
+scipy
+color-matcher
+matplotlib
+clip-interrogator
+simpleeval
+ultralytics
+ultralyticsplus
+opencv-python

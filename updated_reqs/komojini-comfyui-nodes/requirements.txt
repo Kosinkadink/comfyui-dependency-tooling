@@ -1,0 +1,7 @@
+pytube==15.0.0
+opencv-python
+numpy
+torch
+pillow
+psutil
+gputil

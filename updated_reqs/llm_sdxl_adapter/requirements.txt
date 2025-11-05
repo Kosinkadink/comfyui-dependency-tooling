@@ -1,0 +1,5 @@
+transformers>=4.53.1
+einops
+safetensors
+torch
+gguf>=0.17.1

@@ -1,0 +1,7 @@
+pydub
+librosa
+torchaudio
+numpy
+moviepy
+scipy
+soundfile 

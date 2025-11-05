@@ -1,0 +1,8 @@
+pymediainfo
+tomli-w
+requests
+braceexpand
+pillow
+numpy
+markdown-it-py
+aiohttp

@@ -1,0 +1,22 @@
+
+
+#non essential dependencies:
+# DetectorForNSFW 
+onnxruntime>=1.19.2
+
+# DeepfaceAnalyzeFaceAttributes
+deepface==0.0.93
+ultralytics
+tf-keras==2.17.0
+
+# Gemini_prompt_enhance nod
+google-generativeai>0.4.1
+
+# volcano outpainting node
+volcengine
+
+# replicate node
+replicate>=0.22.0
+
+# fal node
+fal-client>=0.7.0

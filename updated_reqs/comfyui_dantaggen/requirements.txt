@@ -1,0 +1,5 @@
+torch
+transformers
+llama-cpp-python
+requests
+sentencepiece

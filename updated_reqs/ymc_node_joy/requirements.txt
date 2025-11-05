@@ -1,0 +1,23 @@
+# Core dependencies
+# torch==2.5.0+cu124
+# transformers==4.47.1
+# numpy==1.26.3
+# Pillow==10.1.0
+# torch
+# transformers
+# numpy
+# Pillow
+
+# ComfyUI specific
+# 
+
+# Custom node utilities
+# yors_comfyui_node_setup==0.10.1
+# yors_pano_ansi_color==1.2.1
+yors_comfyui_node_setup
+yors_pano_ansi_color
+
+# Optional dependencies (for advanced features)
+# bitsandbytes==0.45.0
+# bitsandbytes
+

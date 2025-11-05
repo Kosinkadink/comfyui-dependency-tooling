@@ -1,0 +1,42 @@
+# ========================================
+# ComfyUI-QING Dependencies
+# Version: 1.2.0
+# ========================================
+#
+# Note: ComfyUI already includes torch and numpy
+# Do NOT install them separately to avoid conflicts
+#
+# ========================================
+
+# ------------------------------------------------------------
+# Image Processing Libraries
+# ------------------------------------------------------------
+Pillow>=9.0.0
+opencv-python>=4.5.0
+scipy>=1.7.0
+scikit-image>=0.18.0
+
+# ------------------------------------------------------------
+# SVG Processing
+# ------------------------------------------------------------
+cairosvg>=2.5.0
+
+# Optional: Enhanced SVG processing (uncomment to enable)
+# svglib>=1.4.0
+# reportlab>=3.6.0
+
+# ------------------------------------------------------------
+# AI Model API
+# ------------------------------------------------------------
+openai>=1.0.0
+
+# ========================================
+# System Requirements (Install Separately)
+# ========================================
+#
+# FFmpeg - Required for video synthesis features
+#   Windows: https://ffmpeg.org/download.html
+#   Linux:   sudo apt-get install ffmpeg
+#   macOS:   brew install ffmpeg
+#
+# ========================================

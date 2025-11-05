@@ -1,0 +1,2 @@
+numpy
+face_recognition

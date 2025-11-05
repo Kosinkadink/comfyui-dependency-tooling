@@ -1,0 +1,5 @@
+
+huggingface_hub
+comfy-cli
+PyYAML
+hf_transfer

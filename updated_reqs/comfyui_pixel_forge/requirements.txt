@@ -1,0 +1,4 @@
+lpips
+open_clip_torch
+scipy
+transformers

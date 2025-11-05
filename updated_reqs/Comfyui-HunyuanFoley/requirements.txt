@@ -1,0 +1,25 @@
+# Core ML dependencies (numpy and scipy are often pulled in by torch)
+numpy
+scipy
+
+# Deep Learning frameworks
+diffusers
+timm
+accelerate
+
+# Transformers for loading SigLIP2 and CLAP models from Hugging Face
+transformers
+sentencepiece
+
+# Audio VAE model (requires direct git install)
+git+https://github.com/descriptinc/audiotools
+
+# Image & Tensor manipulation
+pillow
+einops
+
+# Configuration and Utilities
+pyyaml
+omegaconf
+loguru
+tqdm

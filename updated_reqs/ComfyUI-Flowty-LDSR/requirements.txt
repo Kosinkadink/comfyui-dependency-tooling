@@ -1,0 +1,7 @@
+torchvision
+torch
+einops
+omegaconf
+tqdm
+pytorch-lightning
+torchmetrics==0.11.4

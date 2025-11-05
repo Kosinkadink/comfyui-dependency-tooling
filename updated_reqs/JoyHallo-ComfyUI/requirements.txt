@@ -1,0 +1,27 @@
+accelerate
+audio-separator
+av
+bitsandbytes
+decord
+diffusers
+einops
+insightface
+librosa
+mediapipe[vision]==0.10.14
+mlflow
+moviepy
+numpy
+omegaconf
+onnx2torch
+onnx
+onnxruntime-gpu
+opencv-contrib-python
+opencv-python-headless
+opencv-python
+pillow
+tqdm
+transformers
+# xformers
+isort
+pylint
+pre-commit

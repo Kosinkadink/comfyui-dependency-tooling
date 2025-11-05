@@ -1,0 +1,5 @@
+vtracer
+Wand
+Pillow
+torch
+numpy

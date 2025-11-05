@@ -1,0 +1,5 @@
+transformers
+torch
+accelerate
+bitsandbytes
+llama-cpp-python --config-settings=cmake.args="-DGGML_CUDA=on"

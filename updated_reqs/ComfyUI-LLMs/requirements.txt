@@ -1,0 +1,6 @@
+openai>=1.0.0
+zhipuai>=2.0.0
+dashscope>=1.13.0
+google-generativeai>=0.3.0
+Pillow>=10.0.0
+PyYAML>=6.0.1

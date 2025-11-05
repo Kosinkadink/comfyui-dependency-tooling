@@ -1,0 +1,10 @@
+einops
+fairseq
+librosa
+lightning
+mido
+praat-parselmouth
+PyYAML
+scipy
+torchmetrics
+tqdm

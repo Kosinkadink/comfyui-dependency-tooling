@@ -1,0 +1,8 @@
+torch
+torchvision
+Pillow
+numpy
+scikit-image
+opencv-python
+cupy-cuda12x
+cucim

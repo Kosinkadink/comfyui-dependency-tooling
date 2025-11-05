@@ -1,0 +1,4 @@
+lumaai==1.7.0
+requests
+numpy
+Pillow

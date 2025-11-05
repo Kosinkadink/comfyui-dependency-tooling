@@ -1,0 +1,5 @@
+google-genai
+numpy
+torch
+Pillow
+torch

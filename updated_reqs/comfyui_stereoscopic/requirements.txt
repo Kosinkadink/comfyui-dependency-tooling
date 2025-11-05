@@ -1,0 +1,11 @@
+torch
+opencv-python>=4.10.0.84
+numpy
+pillow
+googletrans
+transformers
+gputil
+PyQt5
+plantuml
+pyyaml
+send2trash

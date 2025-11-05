@@ -1,0 +1,13 @@
+kiui
+xatlas
+pyfqmr #https://github.com/sp4cerat/Fast-Quadric-Mesh-Simplification
+plyfile #20240810
+
+#Don't install it for now, it may be needed in the future
+#PIL
+#meshlib #mesh edit
+#eigency 
+#cmeel-eigen
+
+#numpy
+#torch

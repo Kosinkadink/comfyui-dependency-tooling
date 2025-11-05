@@ -1,0 +1,6 @@
+torch>=2.0.1
+numpy
+matplotlib
+langdetect
+deep_translator>=1.11.4
+wordninja

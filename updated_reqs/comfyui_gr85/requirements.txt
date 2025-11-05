@@ -1,0 +1,11 @@
+# Image processing library for handling masks and drawing operations
+opencv-python>=4.5.5.64
+
+# Graph library for constructing and computing the Minimum Spanning Tree (MST)
+networkx>=3.1
+
+# Image processing library for skeletonization
+scikit-image>=0.19.3
+
+# Scientific computing library for distance calculations
+scipy>=1.10.1

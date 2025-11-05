@@ -1,0 +1,4 @@
+faster_whisper
+moviepy
+langid
+jieba

@@ -1,0 +1,25 @@
+      
+# Core ComfyUI/HiDream dependencies
+transformers>=4.36.0
+diffusers>=0.26.0
+torch>=2.0.0
+numpy>=1.24.0
+Pillow>=10.0.0
+safetensors>=0.4.0
+huggingface_hub>=0.17.0
+
+# For standard 4-bit (BNB) models (e.g., 'full', 'dev', 'fast')
+bitsandbytes>=0.41.0
+
+# For NF4/GPTQ models (e.g., 'full-nf4', 'dev-nf4', 'fast-nf4')
+optimum>=1.12.0
+accelerate>=0.25.0
+sageattention
+
+# Add this based on user feedback
+gptqmodel>=2.0.0
+
+# 3.3.0 required for NVIDIA RTX 50xx (Blackwell)
+triton-windows==3.3.0a0.post17; sys_platform == "win32"
+# Keep Triton 3 according to earlier requirements for non-windows platforms.
+triton>=3.0.0,<3.1.0; sys_platform != "win32"

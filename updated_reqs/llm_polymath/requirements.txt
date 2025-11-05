@@ -1,0 +1,14 @@
+google
+google-genai
+openai
+anthropic
+ollama>=0.4.7
+googlesearch-python
+requests
+bs4
+jax
+gallery-dl
+numpy
+Pillow
+json-repair
+easyocr

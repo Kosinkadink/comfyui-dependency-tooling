@@ -1,0 +1,6 @@
+numpy
+datasets
+accelerate
+peft
+diffusers
+timm

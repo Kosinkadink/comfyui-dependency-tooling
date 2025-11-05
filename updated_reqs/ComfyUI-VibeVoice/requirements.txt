@@ -1,0 +1,17 @@
+torch
+accelerate
+torchaudio
+librosa
+numpy
+huggingface_hub
+einops
+scipy
+tokenizers
+soundfile
+s3tokenizer
+conformer
+safetensors
+transformers>=4.51.3
+diffusers
+tqdm
+bitsandbytes

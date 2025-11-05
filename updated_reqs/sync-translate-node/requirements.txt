@@ -1,0 +1,3 @@
+syncsdk==0.1.9
+openai==1.92.0
+httpx==0.27.2

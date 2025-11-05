@@ -1,0 +1,19 @@
+# ComfyUI-PowerVision 插件依赖包
+# 简化版本，依赖 ComfyUI 已有的核心库（torch, torchvision, torchaudio, numpy, pillow）
+
+# Hugging Face 生态系统
+huggingface_hub
+transformers>=4.57.0
+accelerate
+safetensors
+
+# Qwen-VL 专用依赖
+qwen-vl-utils
+
+# 量化支持
+bitsandbytes
+
+# 注意: 
+# - torch, torchvision, torchaudio, numpy, pillow 由 ComfyUI 提供，无需安装
+# - 版本限制已放宽，与 ComfyUI 环境兼容
+# - ModelScope 是可选的备选下载源，可按需安装（已在代码中处理为可选）

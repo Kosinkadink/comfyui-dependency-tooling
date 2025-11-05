@@ -1,0 +1,3 @@
+hydrus-api
+Pillow
+numpy

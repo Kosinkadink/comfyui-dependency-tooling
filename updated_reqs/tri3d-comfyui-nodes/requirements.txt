@@ -1,0 +1,11 @@
+opencv-python
+ninja
+pillow
+torch
+torchvision
+transparent-background
+wget
+gdown
+matplotlib
+python-dotenv
+git+https://github.com/FacePerceiver/facer.git@main

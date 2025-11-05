@@ -1,0 +1,7 @@
+google-generativeai
+python-pptx
+pillow
+numpy
+torch
+requests
+reportlab

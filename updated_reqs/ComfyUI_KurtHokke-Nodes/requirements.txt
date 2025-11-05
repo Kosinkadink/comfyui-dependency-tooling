@@ -1,0 +1,3 @@
+rich
+aiohttp
+Pillow>=10.3.0

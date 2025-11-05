@@ -1,0 +1,11 @@
+# ComfyUI-NunchakuFluxLoraStacker Requirements
+# This node requires the nunchaku package to be installed
+
+# Core dependencies (should be available in ComfyUI environment)
+# folder_paths - ComfyUI built-in
+# logging - Python standard library
+# copy - Python standard library
+# os - Python standard library
+
+# External dependencies
+nunchaku>=1.0.0

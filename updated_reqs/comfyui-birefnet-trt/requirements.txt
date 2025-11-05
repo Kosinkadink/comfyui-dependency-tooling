@@ -1,0 +1,11 @@
+numpy
+timm
+tensorrt
+cuda
+ctypes
+torch
+torchvision
+kornia
+huggingface_hub
+opencv-python
+Pillow

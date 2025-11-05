@@ -1,0 +1,5 @@
+# diffusers[torch]
+accelerate
+transformers 
+safetensors
+omegaconf

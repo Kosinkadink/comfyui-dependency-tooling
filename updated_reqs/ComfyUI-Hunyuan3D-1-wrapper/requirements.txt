@@ -1,0 +1,13 @@
+accelerate
+diffusers
+opencv-python
+imageio
+jaxtyping
+SentencePiece
+trimesh
+rembg[gpu]
+PyMCubes
+xatlas
+libigl
+omegaconf
+matplotlib

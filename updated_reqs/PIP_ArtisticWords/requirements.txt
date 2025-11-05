@@ -1,0 +1,7 @@
+Pillow>=9.0.0
+numpy>=1.20.0
+opencv-python>=4.5.0
+# ComfyUI已经依赖的库，如果单独使用本节点包请确保安装
+# torch
+# torchvision
+webcolors

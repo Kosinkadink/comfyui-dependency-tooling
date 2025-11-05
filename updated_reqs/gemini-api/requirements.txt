@@ -1,0 +1,5 @@
+google-genai>=1.5.0
+Pillow>=10.1.0
+requests
+numpy
+torch

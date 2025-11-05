@@ -1,0 +1,6 @@
+# Requirements for ComfyUI_ASCIINodes
+
+# Pillow is used for image manipulation, text rendering, and font handling.
+Pillow>=9.0.0
+
+# torch and numpy are expected to be provided by the ComfyUI environment.

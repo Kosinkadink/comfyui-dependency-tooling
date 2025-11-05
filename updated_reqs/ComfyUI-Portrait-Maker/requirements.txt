@@ -1,0 +1,12 @@
+aliyun-python-sdk-core-v3==2.13.10
+opencv-python
+tensorflow-cpu
+tensorflow
+onnx
+onnxruntime
+modelscope
+scikit-image
+matplotlib
+insightface
+diffusers==0.18.2
+sentencepiece

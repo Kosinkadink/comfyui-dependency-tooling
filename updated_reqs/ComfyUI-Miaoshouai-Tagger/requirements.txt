@@ -1,0 +1,4 @@
+transformers==4.49.0
+matplotlib
+timm
+pillow >= 10.2.0

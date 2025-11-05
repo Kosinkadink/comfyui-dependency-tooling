@@ -1,0 +1,5 @@
+googletrans
+datetime
+opencv-python
+asyncio
+requests

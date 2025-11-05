@@ -1,0 +1,4 @@
+easydict
+groundingdino-py
+sam2
+decord

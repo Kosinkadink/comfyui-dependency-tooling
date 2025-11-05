@@ -1,0 +1,4 @@
+diffusers>=0.26.0
+accelerate
+omegaconf
+sentencepiece

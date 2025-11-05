@@ -1,0 +1,4 @@
+requests
+playwright
+opencv-python
+re

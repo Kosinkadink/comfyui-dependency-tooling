@@ -1,0 +1,2 @@
+# No external dependencies required
+# This node uses only Python standard library (random module)

@@ -1,0 +1,32 @@
+# ----------------------------
+# aistudynow QwenVL Requirements
+# ----------------------------
+# Core ML libraries
+torch>=2.1.0
+transformers>=4.40.0
+huggingface-hub>=0.22.2
+accelerate>=0.27.0
+bitsandbytes>=0.42.0
+
+# Image and video support
+Pillow>=10.0.0
+opencv-python>=4.8.1.78
+numpy>=1.25.0
+psutil>=5.9.5
+
+# Optional high-performance attention
+flash-attn>=2.3.6; platform_system == "Linux" and platform_machine == "x86_64"
+
+# GGUF + local LLM support (for quantized models)
+llama-cpp-python[server]>=0.2.78
+
+# Optional visualization / debugging
+tqdm>=4.66.0
+
+# ----------------------------
+# Notes:
+# - flash-attn is optional and only installs on compatible Linux GPUs.
+# - bitsandbytes enables 4-bit and 8-bit quantization for lower VRAM GPUs.
+# - llama-cpp-python[server] allows GGUF vision models to run locally.
+# - accelerate helps manage mixed precision and device map offloading.
+# ----------------------------

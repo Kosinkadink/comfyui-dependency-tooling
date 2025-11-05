@@ -1,0 +1,4 @@
+librosa
+accelerate>=0.26.0
+vector-quantize-pytorch
+vocos

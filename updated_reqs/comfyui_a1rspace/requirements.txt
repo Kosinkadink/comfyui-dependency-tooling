@@ -1,0 +1,21 @@
+# 核心依赖 - 主要功能所需
+safetensors      # 模型加载安全性
+transformers     # 文本编码和处理
+torch         # 采样器所需
+numpy            # 数组处理
+einops           # 张量操作
+
+# 图像处理依赖
+Pillow           # 图像处理 (node_upscale.py中使用)
+kornia           # 高级图像转换 (node_controlnet.py中使用)
+
+# API集成与服务
+requests         # API请求 (node_text.py中使用)
+openai           # AI模型API (node_text.py中使用)
+
+# 系统与性能
+psutil           # 系统资源监控
+
+# JoyTag模块依赖
+huggingface-hub  # JoyTag模型下载
+onnxruntime      # JoyTag推理

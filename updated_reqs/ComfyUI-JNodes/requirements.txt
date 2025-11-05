@@ -1,0 +1,7 @@
+opencv-python
+piexif
+imageio_ffmpeg
+token_count
+aiofiles
+numba
+send2trash

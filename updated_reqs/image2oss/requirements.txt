@@ -1,0 +1,5 @@
+oss2
+numpy
+requests
+pillow
+torch

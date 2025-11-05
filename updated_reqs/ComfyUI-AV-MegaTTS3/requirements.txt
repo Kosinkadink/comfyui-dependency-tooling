@@ -1,0 +1,8 @@
+setproctitle
+attrdict
+librosa
+pydub
+pyloudnorm
+x-transformers
+torchdiffeq
+openai-whisper>=20240930

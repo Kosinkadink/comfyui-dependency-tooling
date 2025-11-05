@@ -1,0 +1,24 @@
+# Core PyTorch dependencies
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+
+# Essential ML dependencies
+numpy>=1.24.0
+scipy>=1.11.0
+scikit-learn>=1.3.0
+
+# Utility dependencies
+tqdm>=4.64.0
+pyyaml>=6.0.0
+packaging>=23.1
+
+# For configuration management
+coqpit>=0.0.16
+
+# For data handling
+h5py
+
+# Optional but commonly used
+transformers>=4.33.0
+einops>=0.6.0

@@ -1,0 +1,12 @@
+timm
+transformers
+fairscale
+pycocoevalcap
+opencv-python
+qrcode[pil]
+pytorch_lightning
+kornia
+pydantic
+segment_anything
+omegaconf
+boto3

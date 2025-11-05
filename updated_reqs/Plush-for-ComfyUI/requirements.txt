@@ -1,0 +1,8 @@
+numpy
+openai
+Pillow
+torch
+requests
+pyexiv2
+anthropic
+google-genai

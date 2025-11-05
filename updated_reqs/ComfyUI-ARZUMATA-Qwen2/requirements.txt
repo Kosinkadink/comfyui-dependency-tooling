@@ -1,0 +1,9 @@
+torch
+numpy
+pillow
+huggingface_hub
+decord
+accelerate
+qwen-vl-utils[decord]
+auto-gptq 
+transformers>=4.45.0

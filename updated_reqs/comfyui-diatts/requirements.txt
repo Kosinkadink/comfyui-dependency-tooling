@@ -1,0 +1,3 @@
+# ComfyUI-DiaTTS/requirements.txt
+
+descript-audio-codec

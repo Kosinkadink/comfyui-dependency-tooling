@@ -1,0 +1,10 @@
+torchvision
+numpy
+pillow
+matplotlib
+scipy
+tqdm
+qwen-vl-utils
+qwen-vl-utils
+bitsandbytes
+optimum

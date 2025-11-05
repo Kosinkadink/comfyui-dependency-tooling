@@ -1,0 +1,9 @@
+decord
+huggingface_hub
+matplotlib
+opencv_python
+pyarrow
+flash_attn
+accelerate
+bitsandbytes
+# dfloat11[cuda12] # Removed the comment if u wanna use df11

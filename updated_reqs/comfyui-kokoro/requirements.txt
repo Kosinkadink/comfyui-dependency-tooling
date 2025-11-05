@@ -1,0 +1,5 @@
+kokoro-onnx==0.4.2
+onnxruntime
+numpy
+requests
+tqdm

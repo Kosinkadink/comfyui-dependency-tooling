@@ -1,0 +1,11 @@
+# Core numeric stack
+numpy>=1.24
+torch>=2.0
+
+# Image processing
+opencv-python>=4.8
+
+# Testing utilities
+pytest>=7.4
+pytest-mock>=3.11
+

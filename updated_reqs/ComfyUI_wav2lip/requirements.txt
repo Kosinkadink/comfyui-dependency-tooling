@@ -1,0 +1,8 @@
+numpy
+torch
+pydub
+soundfile
+opencv-python
+torchvision
+pathlib
+librosa

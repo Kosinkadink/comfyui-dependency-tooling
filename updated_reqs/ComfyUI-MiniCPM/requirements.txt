@@ -1,0 +1,15 @@
+# Core dependencies for MiniCPM transformers functionality
+torch>=2.0.0
+transformers>=4.35.0
+torchvision>=0.15.0
+Pillow>=9.0.0
+huggingface-hub>=0.16.0
+hf_xet>=0.16.0
+
+# Optional: GGUF functionality (llama-cpp-python)
+# Uncomment the line below if you want GGUF support
+# llama-cpp-python>=0.2.0
+
+# Additional utilities
+numpy>=1.21.0
+accelerate>=0.20.0 

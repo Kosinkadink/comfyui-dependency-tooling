@@ -1,0 +1,4 @@
+ultralytics 
+mediapipe
+opencv-python
+onnxruntime-gpu

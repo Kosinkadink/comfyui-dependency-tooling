@@ -1,0 +1,5 @@
+# ComfyUI Wan2.2提示词生成插件依赖包
+openai>=1.0.0          # OpenAI API支持
+anthropic>=0.7.0       # Claude API支持
+pillow>=9.0.0          # 图像处理
+requests>=2.28.0       # HTTP请求

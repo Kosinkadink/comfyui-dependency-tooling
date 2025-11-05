@@ -1,0 +1,16 @@
+accelerate
+torchaudio
+Pillow
+requests
+opencv-python
+moviepy
+scipy
+scikit-image
+scikit-learn
+numpy
+yacs
+PyYAML
+imageio
+ffmpeg-python
+av
+

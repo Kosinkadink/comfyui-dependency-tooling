@@ -1,0 +1,167 @@
+# ================================================================
+# ComfyUI IndexTTS2 Plugin - Essential Dependencies Only
+# ================================================================
+# 仅包含 IndexTTS2 特有的必需依赖
+# Only essential dependencies specific to IndexTTS2
+#
+# 注意：ComfyUI 环境中的通用依赖（如 torch, numpy 等）已排除
+# Note: Common ComfyUI dependencies (torch, numpy, etc.) are excluded
+# ================================================================
+
+# IndexTTS2 特有的音频处理库
+# IndexTTS2-specific audio processing
+librosa>=0.10.1
+soundfile>=0.12.1
+descript-audiotools
+
+# 中文文本处理 (IndexTTS2 必需)
+# Chinese text processing (required for IndexTTS2)
+jieba>=0.42.1
+cn2an>=0.5.22
+wetext>=0.1.0
+
+# 英文音素转换 (IndexTTS2 必需)
+# English phoneme conversion (required for IndexTTS2)
+g2p-en>=2.1.0
+
+# 配置文件处理 (IndexTTS2 必需)
+# Configuration file handling (required for IndexTTS2)
+omegaconf>=2.3.0
+munch>=4.0.0
+json5>=0.9.0
+
+# 深度学习和张量操作 (IndexTTS2 必需)
+# Deep learning and tensor operations (required for IndexTTS2)
+einops>=0.8.0
+scipy>=1.11.0
+numpy>=1.22.0
+numba>=0.51.0
+
+# 模型下载和处理 (IndexTTS2 必需)
+# Model download and processing (required for IndexTTS2)
+modelscope>=1.27.0
+transformers  # 不限制版本，通过兼容层支持所有版本
+tokenizers>=0.15.0
+accelerate>=0.25.0
+safetensors>=0.4.0
+huggingface-hub>=0.19.0
+sentencepiece>=0.1.99
+
+# 音频/视频处理和编解码
+# Audio/video processing and codecs
+ffmpeg-python>=0.2.0
+
+# 数据处理和分析
+# Data processing and analysis
+pandas>=1.5.0
+
+# 可视化和绘图
+# Visualization and plotting
+matplotlib>=3.5.0
+
+# 训练监控和日志
+# Training monitoring and logging
+tensorboard>=2.12.0
+
+# 进度条和用户界面
+# Progress bars and user interface
+tqdm>=4.64.0
+
+# ================================================================
+# 可选依赖 / Optional Dependencies
+# ================================================================
+
+# 高级文本标准化 (完全可选)
+# Advanced text normalization (completely optional)
+#
+# 🎉 Windows 用户福音：我们现在提供预编译轮子文件！
+# 🎉 Good news for Windows users: We now provide pre-compiled wheel files!
+#
+# Windows 安装方法 (选择其一):
+# Windows installation methods (choose one):
+#
+# 方法1: 使用项目提供的轮子文件 (推荐)
+# Method 1: Use provided wheel files (recommended)
+# Python 3.10: pip install pynini-wheel/pynini-2.1.6.post1-cp310-cp310-win_amd64.whl
+# Python 3.11: pip install pynini-wheel/pynini-2.1.6.post1-cp311-cp311-win_amd64.whl
+# Python 3.12: pip install pynini-wheel/pynini-2.1.6.post1-cp312-cp312-win_amd64.whl
+# Python 3.13: pip install pynini-wheel/pynini-2.1.6.post1-cp313-cp313-win_amd64.whl
+#
+# 方法2: 使用自动安装脚本
+# Method 2: Use automatic installation script
+# python install_pynini_windows.py
+#
+# 方法3: 使用 conda (如果可用)
+# Method 3: Use conda (if available)
+# conda install -c conda-forge pynini=2.1.6
+#
+# 功能：处理复杂文本格式（数字、日期、货币等）
+# Function: Handles complex text formats (numbers, dates, currencies, etc.)
+#
+# 如果不需要高级文本处理，可以跳过安装，基本功能不受影响
+# If you don't need advanced text processing, you can skip installation
+#
+# pynini==2.1.6
+
+# ================================================================
+# 深度学习加速 (可选)
+# Deep Learning Acceleration (optional)
+# ================================================================
+
+# DeepSpeed 深度学习优化库 (可选，显著提升性能)
+# DeepSpeed deep learning optimization library (optional, significant performance boost)
+#
+# 🪟 Windows 用户注意：需要使用社区提供的轮子文件
+# 🪟 Windows users: Need to use community-provided wheel files
+#
+# Windows 轮子下载地址 / Windows wheels download:
+# https://github.com/6Morpheus6/deepspeed-windows-wheels/releases
+#
+# 安装方法 / Installation:
+# 1. 访问上述链接下载适合您 Python 版本的轮子文件
+# 2. pip install [下载的轮子文件名].whl
+#
+# Linux/macOS 用户可直接安装:
+# Linux/macOS users can install directly:
+# deepspeed>=0.12.0
+#
+# 功能：显著提升推理速度，优化内存使用
+# Function: Significantly improves inference speed, optimizes memory usage
+#
+# 如果安装失败，可以跳过，基本功能不受影响
+# If installation fails, you can skip it, basic functions are not affected
+
+# ================================================================
+# 扩展功能依赖 (可选)
+# Extended Features Dependencies (optional)
+# ================================================================
+
+# Python 编译和扩展 (可选)
+# Python compilation and extensions (optional)
+# Cython>=0.29.0
+
+# 机器学习框架 (可选)
+# Machine learning frameworks (optional)
+# keras>=2.12.0
+
+# 计算机视觉 (可选)
+# Computer vision (optional)
+# opencv-python>=4.5.0
+
+# 文本分析和统计 (可选)
+# Text analysis and statistics (optional)
+# textstat>=0.7.0
+
+# ================================================================
+# 安装说明 / Installation Notes
+# ================================================================
+# 1. 确保 ComfyUI 环境已正确安装
+#    Make sure ComfyUI environment is properly installed
+#
+# 2. 在 ComfyUI 环境中安装：
+#    Install in ComfyUI environment:
+#    pip install -r requirements.txt
+#
+# 3. 如果遇到音频处理问题，可能需要安装 FFmpeg
+#    For audio processing issues, you may need to install FFmpeg
+# ================================================================

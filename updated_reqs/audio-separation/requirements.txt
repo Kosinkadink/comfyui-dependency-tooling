@@ -1,0 +1,10 @@
+torch
+torchaudio
+numpy
+safetensors
+tqdm
+seconohe>=1.0.2
+# Optionals:
+# requests
+# colorama
+# onnxruntime

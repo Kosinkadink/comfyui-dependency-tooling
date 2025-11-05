@@ -1,0 +1,4 @@
+librosa
+omegaconf
+conformer
+diffusers

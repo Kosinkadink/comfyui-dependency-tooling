@@ -1,0 +1,39 @@
+#--extra-index-url https://download.pytorch.org/whl/cu121
+#--find-links https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu121.html
+
+#torch>=2.5.1+cu124
+#torchvision>=0.20.1+cu124
+pillow
+imageio
+imageio-ffmpeg
+tqdm
+easydict
+opencv-python-headless
+scipy
+rembg
+ninja
+#diso
+plyfile
+onnxruntime
+onnxruntime-gpu
+trimesh
+xatlas
+pyvista
+pymeshfix
+igraph
+git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
+xformers
+triton
+spconv-cu124>=2.3.6
+#transformers>=4.46.3
+sageattention
+#git+https://github.com/Dao-AILab/flash-attention
+git+https://github.com/autonomousvision/mip-splatting.git@main#subdirectory=submodules/diff-gaussian-rasterization
+diffrp-nvdiffrast
+
+# koalin ( CUDA 12.4 specific builds from : https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.5.1_cu124.html )
+# If you're not using CUDA 12.4, read official documentation at : https://kaolin.readthedocs.io/en/latest/notes/installation.html
+https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.5.1_cu124/kaolin-0.17.0-cp312-cp312-linux_x86_64.whl; (python_version >= "3.12" and python_version < "3.13")
+https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.5.1_cu124/kaolin-0.17.0-cp311-cp311-linux_x86_64.whl; (python_version >= "3.11" and python_version < "3.12")
+https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.5.1_cu124/kaolin-0.17.0-cp310-cp310-linux_x86_64.whl; (python_version >= "3.10" and python_version < "3.11")
+https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.5.1_cu124/kaolin-0.17.0-cp39-cp39-linux_x86_64.whl; (python_version >= "3.9" and python_version < "3.10")

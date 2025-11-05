@@ -1,0 +1,7 @@
+diffusers
+accelerate
+Pillow
+torch>=2.1.0
+protobuf
+sentencepiece
+tqdm

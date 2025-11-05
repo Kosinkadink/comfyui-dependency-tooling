@@ -1,0 +1,17 @@
+numpy
+einops
+opencv-python
+matplotlib
+imageio
+omegaconf
+scikit-image
+face-alignment
+torchvision
+diffusers
+pytorch-lightning
+xformers
+sageattention
+transformers
+open-clip-torch
+imageio[ffmpeg]
+triton

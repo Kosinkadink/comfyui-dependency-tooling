@@ -1,0 +1,8 @@
+# ComfyUI-Ninode-Utils v0.9.3
+# Utility nodes for ComfyUI including OpenAI Compatible Chat and Voice Design
+
+aiohttp>=3.8.0
+torch>=2.0.0
+Pillow>=9.0.0
+numpy>=1.25.0
+torchaudio>=2.0.0

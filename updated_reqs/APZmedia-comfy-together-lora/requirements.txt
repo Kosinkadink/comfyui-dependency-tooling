@@ -1,0 +1,4 @@
+together
+numpy
+Pillow
+python-dotenv

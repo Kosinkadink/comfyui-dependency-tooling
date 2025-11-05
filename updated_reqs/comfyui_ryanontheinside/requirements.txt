@@ -1,0 +1,11 @@
+opencv-python>=4.10.0
+scipy
+pillow
+librosa>=0.10.2
+pymunk==6.8.1
+matplotlib
+openunmix
+mido
+torchaudio
+pygame
+scikit-image

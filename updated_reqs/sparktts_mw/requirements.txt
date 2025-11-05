@@ -1,0 +1,10 @@
+pyaudio
+omegaconf
+packaging
+soundfile
+soxr>=0.5.0.post1
+sounddevice
+noisereduce
+einx>=0.3.0
+librosa
+transformers>=4.45

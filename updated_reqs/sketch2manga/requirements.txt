@@ -1,0 +1,24 @@
+omegaconf
+scikit-image
+
+opencv-python
+einops
+scikit-learn
+requests
+Pillow
+
+
+# Added by Francis
+tqdm
+pandas
+
+
+# Adding for additional function
+# requests
+
+numpy==1.26.4
+gradio==3.41.2
+gradio-client==0.5.0
+scipy
+pydantic
+pandas

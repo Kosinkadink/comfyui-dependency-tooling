@@ -1,0 +1,5 @@
+pyautogen>0.2
+pymemgpt
+llama-cpp-python
+Pillow<10
+websockets<12.0

@@ -1,0 +1,5 @@
+huggingface_hub
+transformers
+opencv-python; sys_platform != 'linux'
+opencv-python-headless; sys_platform != 'win32'
+bitsandbytes

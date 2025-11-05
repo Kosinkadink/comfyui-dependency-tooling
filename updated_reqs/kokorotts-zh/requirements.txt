@@ -1,0 +1,4 @@
+kokoro
+soundfile
+tqdm
+misaki

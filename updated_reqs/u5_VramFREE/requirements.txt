@@ -1,0 +1,8 @@
+# ComfyUI u5 VRAM FREE Requirements
+# Optional dependencies for enhanced functionality
+
+# PyTorch - Usually already installed with ComfyUI
+# torch>=1.9.0
+
+# System resource monitoring (optional but recommended)
+psutil>=5.8.0

@@ -1,0 +1,5 @@
+torch
+Pillow
+numpy
+matplotlib
+azure-storage-blob

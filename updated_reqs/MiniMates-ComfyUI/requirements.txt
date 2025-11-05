@@ -1,0 +1,7 @@
+kaldi_native_fbank
+mediapipe
+onnxruntime
+librosa
+glfw
+PyOpenGL
+scikit-learn

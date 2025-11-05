@@ -1,0 +1,8 @@
+requests
+pydantic
+fastapi
+sentry_sdk
+tenacity
+openai
+tiktoken
+anthropic

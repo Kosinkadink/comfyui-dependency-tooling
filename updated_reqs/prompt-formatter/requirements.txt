@@ -1,0 +1,3 @@
+# /ComfyUI-Prompt-Formatter/requirements.txt
+
+PyYAML>=5.1

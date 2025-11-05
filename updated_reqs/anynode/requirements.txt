@@ -1,0 +1,13 @@
+openai
+torch
+torchaudio
+torchvision
+numpy
+scikit-learn
+google-generativeai
+chromadb
+opencv-python
+pillow
+scipy
+matplotlib
+anthropic

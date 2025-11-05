@@ -1,0 +1,12 @@
+numpy
+torch
+torchvision
+Pillow
+moviepy
+librosa
+transformers
+opencv-python-headless
+requests
+matplotlib
+scipy
+pyspellchecker

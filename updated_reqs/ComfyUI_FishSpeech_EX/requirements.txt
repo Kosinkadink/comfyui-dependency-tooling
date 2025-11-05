@@ -1,0 +1,13 @@
+hydra-core
+loguru
+lightning
+loralib
+ormsgpack
+pyrootutils
+baize
+kui
+funasr
+onnxconverter_common
+silero_vad
+natsort
+vector-quantize-pytorch==1.14.24

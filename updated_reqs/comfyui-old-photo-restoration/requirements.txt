@@ -1,0 +1,11 @@
+PyYAML
+dill
+dlib-bin
+dominate
+easydict
+einops
+matplotlib
+opencv-python
+scikit-image
+scipy
+tensorboardX

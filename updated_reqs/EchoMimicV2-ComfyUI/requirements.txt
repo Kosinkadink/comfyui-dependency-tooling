@@ -1,0 +1,12 @@
+diffusers
+omegaconf
+decord
+moviepy
+ffmpeg-python
+av
+matplotlib
+accelerate
+mediapipe
+torchao;sys_platform!='win32'
+IPython
+wheel

@@ -1,0 +1,5 @@
+minio
+aliyun-python-sdk-core-v3==2.13.10
+aliyun-python-sdk-kms==2.13.10
+oss2==2.13.1
+tqdm

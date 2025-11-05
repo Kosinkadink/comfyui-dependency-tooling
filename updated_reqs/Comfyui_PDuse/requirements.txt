@@ -1,0 +1,8 @@
+xlrd
+openpyxl
+scipy
+numpy
+Pillow
+torch
+torchvision
+opencv-python

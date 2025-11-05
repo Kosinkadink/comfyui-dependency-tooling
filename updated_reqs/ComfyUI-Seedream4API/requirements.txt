@@ -1,0 +1,6 @@
+torch>=1.13.0
+numpy>=1.21.0
+Pillow>=9.0.0
+requests>=2.25.0
+replicate==1.0.7
+colorama==0.4.6

@@ -1,0 +1,5 @@
+numpy
+torch
+requests
+beautifulsoup4
+pillow

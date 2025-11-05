@@ -1,0 +1,8 @@
+requests
+ntplib
+numpy
+torch
+Pillow
+openpyxl
+chardet
+pytz

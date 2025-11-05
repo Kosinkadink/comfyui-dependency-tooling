@@ -1,0 +1,7 @@
+torch
+diffusers
+imageio
+numpy
+opencv-python
+transformers
+huggingface-hub

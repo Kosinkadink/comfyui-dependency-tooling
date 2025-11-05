@@ -1,0 +1,8 @@
+basicsr>=1.4.2
+numpy
+opencv-python
+Pillow
+torch>=1.7
+torchvision
+requests
+realesrgan

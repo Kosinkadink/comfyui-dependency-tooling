@@ -1,0 +1,17 @@
+
+librosa
+opencv-python
+requests
+imageio_ffmpeg
+timm
+omegaconf
+plyfile
+huggingface_hub
+pydub
+#-The following may already be present:
+#easyocr
+#pydub-optional
+#-Already included in the Comfyui ontology dependency package
+#psutil
+#numpy
+#pillow

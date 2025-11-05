@@ -1,0 +1,7 @@
+cmake
+dlib==19.24.1
+easydict
+matplotlib
+opencv-python
+scikit-image
+scipy

@@ -1,0 +1,7 @@
+# YouTube動画ダウンロードのための依存関係
+yt-dlp>=2023.12.30
+
+# 注意: 音声変換にはffmpegが必要です
+# Windows: https://github.com/BtbN/FFmpeg-Builds/releases からダウンロード
+# macOS: brew install ffmpeg
+# Linux: sudo apt install ffmpeg (Ubuntu/Debian) または sudo yum install ffmpeg (CentOS/RHEL)

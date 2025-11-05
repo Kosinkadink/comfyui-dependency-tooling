@@ -1,0 +1,14 @@
+torch
+librosa
+pydub
+faster-whisper
+whisper-timestamped
+inflect
+unidecode
+eng_to_ipa
+pypinyin
+jieba
+cn2an
+wavmark
+huggingface_hub
+soundfile

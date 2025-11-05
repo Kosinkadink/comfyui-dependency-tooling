@@ -1,0 +1,7 @@
+stable-audio-tools
+torch
+torchaudio
+einops
+numpy
+aeiou
+flash_attn

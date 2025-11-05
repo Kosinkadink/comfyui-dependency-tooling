@@ -1,0 +1,17 @@
+decord
+einops
+imageio
+omegaconf
+opencv_python
+pandas
+Pillow
+pytorch_lightning
+PyYAML
+tqdm
+transformers
+moviepy
+av
+timm
+scikit-learn 
+open_clip_torch==2.22.0
+kornia

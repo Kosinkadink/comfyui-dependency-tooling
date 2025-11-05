@@ -1,0 +1,5 @@
+google-genai>=1.40.0
+numpy
+torch
+Pillow
+torch

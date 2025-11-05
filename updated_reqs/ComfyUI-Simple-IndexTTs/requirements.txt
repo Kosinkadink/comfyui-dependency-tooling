@@ -1,0 +1,14 @@
+librosa
+json5
+torch
+torchaudio
+huggingface_hub
+transformers<=4.53.0
+omegaconf
+einops
+descript-audiotools==0.7.2
+tokenizer
+eval
+munch
+accelerate
+wetext

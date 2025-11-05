@@ -1,0 +1,4 @@
+numpy
+scipy
+omegaconf
+timm>=0.9.7

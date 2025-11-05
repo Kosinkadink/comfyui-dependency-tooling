@@ -1,0 +1,14 @@
+pydub
+srt
+librosa
+LangSegment
+transformers
+cn2an
+pypinyin
+jieba_fast
+pyopenjtalk
+wordsegment
+g2p_en
+pytorch_lightning
+audiotsm
+ffmpeg-python

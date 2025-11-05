@@ -1,0 +1,6 @@
+# ComfyUI Violet Tools Requirements
+# Core dependencies for aesthetic-focused custom nodes
+
+PyYAML>=6.0
+rapidfuzz>=3.0
+requests>=2.31

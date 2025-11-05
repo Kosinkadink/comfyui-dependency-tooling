@@ -1,0 +1,2 @@
+ollama
+huggingface_hub

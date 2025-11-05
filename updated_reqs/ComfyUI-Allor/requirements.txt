@@ -1,0 +1,12 @@
+rembg
+onnx
+
+# Optional for auto updates
+gitpython
+
+# If you want you can install onnxruntime with GPU support
+# onnxruntime[gpu]
+
+# For Nvidia (only for GPU onnxruntime)
+# tensorrt
+# cuda-python

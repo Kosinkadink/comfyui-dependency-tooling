@@ -1,0 +1,7 @@
+pandas
+requests
+openpyxl
+python-docx
+aiohttp_session
+bcrypt
+Jinja2

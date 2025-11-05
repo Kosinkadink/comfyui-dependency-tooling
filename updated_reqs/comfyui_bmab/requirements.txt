@@ -1,0 +1,14 @@
+lightning
+segment_anything
+omegaconf
+ultralytics
+scikit-image
+huggingface_hub
+transformers>=4.40.0
+blendmodes
+opencv-python
+urllib3
+pillow
+pillow_avif_plugin
+blendmodes
+diffusers
