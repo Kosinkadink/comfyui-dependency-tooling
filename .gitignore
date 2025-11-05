@@ -1,6 +1,6 @@
 results/*
-manager-files/*
-updated_reqs/*
+# manager-files/*
+# updated_reqs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

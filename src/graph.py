@@ -275,6 +275,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         pip_nonos_counts = []
         pip_nonos_dep_counts = []
         pip_nonos_download_counts = []  # actual downloads for hover
+        pip_nonos_route_counts = []
         pip_nonos_web_dir_status = []
 
         cumulative_downloads = []
@@ -319,6 +320,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 pip_nonos_counts.append(pip_nonos_count)
                 pip_nonos_dep_counts.append(dep_count)
                 pip_nonos_download_counts.append(download_count)
+                pip_nonos_route_counts.append(route_count)
                 pip_nonos_web_dir_status.append('Yes' if has_web_dir else 'No')
 
             # Append to appropriate lists
@@ -386,23 +388,6 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                            'Web Directory: No<br>' +
                            '<extra></extra>')
 
-        # Add trace for nodes without web directories (blue)
-        if no_web_dir_ranks:
-            fig.add_trace(go.Bar(
-                x=no_web_dir_ranks,
-                y=no_web_dir_downloads,
-                name='No Web Directory',
-                marker=dict(
-                    color='#3498db',  # Blue
-                    line=dict(width=0.5, color='#2c3e50')
-                ),
-                text=no_web_dir_names,
-                textposition='auto',
-                customdata=list(zip(no_web_dir_ids, no_web_dir_download_counts if metric == 'deps' else no_web_dir_dep_counts,
-                                   no_web_dir_route_counts, no_web_dir_pip_nonos_counts)),
-                hovertemplate=no_web_hover
-            ))
-
         # Build hover template for web directory nodes
         if metric == 'deps':
             web_hover = ('<b>Rank #%{x}</b><br>' +
@@ -425,23 +410,6 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                         'Web Directory: Yes<br>' +
                         '<extra></extra>')
 
-        # Add trace for nodes with web directories (green)
-        if web_dir_ranks:
-            fig.add_trace(go.Bar(
-                x=web_dir_ranks,
-                y=web_dir_downloads,
-                name='Has Web Directory',
-                marker=dict(
-                    color='#2ecc71',  # Green
-                    line=dict(width=0.5, color='#27ae60')
-                ),
-                text=web_dir_names,
-                textposition='auto',
-                customdata=list(zip(web_dir_ids, web_dir_download_counts if metric == 'deps' else web_dir_dep_counts,
-                                   web_dir_route_counts, web_dir_pip_nonos_counts)),
-                hovertemplate=web_hover
-            ))
-
         # Build hover template for routes
         if metric == 'deps':
             routes_hover = ('<b>Rank #%{x}</b><br>' +
@@ -462,7 +430,135 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                            'Web Directory: %{customdata[3]}<br>' +
                            '<extra></extra>')
 
+        # Build hover template for pip-nonos
+        if metric == 'deps':
+            pip_nonos_hover = ('<b>Rank #%{x}</b><br>' +
+                              'Dependencies: %{y}<br>' +
+                              'Name: %{text}<br>' +
+                              'ID: %{customdata[0]}<br>' +
+                              'Downloads: %{customdata[1]:,.0f}<br>' +
+                              'Routes: %{customdata[2]}<br>' +
+                              'Pip Calls: %{customdata[3]}<br>' +
+                              'Web Directory: %{customdata[4]}<br>' +
+                              '<extra></extra>')
+        else:
+            pip_nonos_hover = ('<b>Rank #%{x}</b><br>' +
+                              'Downloads: %{y:,.0f}<br>' +
+                              'Name: %{text}<br>' +
+                              'ID: %{customdata[0]}<br>' +
+                              'Dependencies: %{customdata[1]}<br>' +
+                              'Routes: %{customdata[2]}<br>' +
+                              'Pip Calls: %{customdata[3]}<br>' +
+                              'Web Directory: %{customdata[4]}<br>' +
+                              '<extra></extra>')
+
+        # Add visual indicators for zero-value bars (small circles at bottom)
+        # Only add indicators for zeros in the metric being displayed
+        # These are added FIRST so they appear behind everything else
+        if metric == 'downloads':
+            # Check for zero downloads in nodes without web directories
+            zero_no_web_indices = [i for i in range(len(no_web_dir_download_counts)) if no_web_dir_download_counts[i] == 0]
+        else:  # metric == 'deps'
+            # Check for zero dependencies in nodes without web directories
+            zero_no_web_indices = [i for i in range(len(no_web_dir_dep_counts)) if no_web_dir_dep_counts[i] == 0]
+
+        if zero_no_web_indices:
+            zero_no_web_ranks = [no_web_dir_ranks[i] for i in zero_no_web_indices]
+            zero_no_web_names = [no_web_dir_names[i] for i in zero_no_web_indices]
+            zero_no_web_ids = [no_web_dir_ids[i] for i in zero_no_web_indices]
+            zero_no_web_dep_counts = [no_web_dir_dep_counts[i] for i in zero_no_web_indices]
+            zero_no_web_download_counts = [no_web_dir_download_counts[i] for i in zero_no_web_indices]
+            zero_no_web_route_counts = [no_web_dir_route_counts[i] for i in zero_no_web_indices]
+            zero_no_web_pip_nonos_counts = [no_web_dir_pip_nonos_counts[i] for i in zero_no_web_indices]
+
+            fig.add_trace(go.Scatter(
+                x=zero_no_web_ranks,
+                y=[0] * len(zero_no_web_ranks),  # Position at y=0
+                mode='markers',
+                name='Zero Value (No Web Dir)',
+                marker=dict(
+                    symbol='circle',
+                    size=6,
+                    color='#3498db',  # Blue (matching no web dir color)
+                    line=dict(width=1, color='#2c3e50')
+                ),
+                customdata=list(zip(zero_no_web_ids, zero_no_web_download_counts if metric == 'deps' else zero_no_web_dep_counts,
+                                   zero_no_web_route_counts, zero_no_web_pip_nonos_counts)),
+                hovertemplate=no_web_hover,
+                text=zero_no_web_names,
+                showlegend=False  # Don't clutter legend
+            ))
+
+        # Check for zero values in nodes with web directories
+        if metric == 'downloads':
+            zero_web_indices = [i for i in range(len(web_dir_download_counts)) if web_dir_download_counts[i] == 0]
+        else:  # metric == 'deps'
+            zero_web_indices = [i for i in range(len(web_dir_dep_counts)) if web_dir_dep_counts[i] == 0]
+
+        if zero_web_indices:
+            zero_web_ranks = [web_dir_ranks[i] for i in zero_web_indices]
+            zero_web_names = [web_dir_names[i] for i in zero_web_indices]
+            zero_web_ids = [web_dir_ids[i] for i in zero_web_indices]
+            zero_web_dep_counts = [web_dir_dep_counts[i] for i in zero_web_indices]
+            zero_web_download_counts = [web_dir_download_counts[i] for i in zero_web_indices]
+            zero_web_route_counts = [web_dir_route_counts[i] for i in zero_web_indices]
+            zero_web_pip_nonos_counts = [web_dir_pip_nonos_counts[i] for i in zero_web_indices]
+
+            fig.add_trace(go.Scatter(
+                x=zero_web_ranks,
+                y=[0] * len(zero_web_ranks),  # Position at y=0
+                mode='markers',
+                name='Zero Value (Has Web Dir)',
+                marker=dict(
+                    symbol='circle',
+                    size=6,
+                    color='#2ecc71',  # Green (matching web dir color)
+                    line=dict(width=1, color='#27ae60')
+                ),
+                customdata=list(zip(zero_web_ids, zero_web_download_counts if metric == 'deps' else zero_web_dep_counts,
+                                   zero_web_route_counts, zero_web_pip_nonos_counts)),
+                hovertemplate=web_hover,
+                text=zero_web_names,
+                showlegend=False  # Don't clutter legend
+            ))
+
+        # Add bar charts after zero-value indicators
+        # Add trace for nodes without web directories (blue)
+        if no_web_dir_ranks:
+            fig.add_trace(go.Bar(
+                x=no_web_dir_ranks,
+                y=no_web_dir_downloads,
+                name='No Web Directory',
+                marker=dict(
+                    color='#3498db',  # Blue
+                    line=dict(width=0.5, color='#2c3e50')
+                ),
+                text=no_web_dir_names,
+                textposition='auto',
+                customdata=list(zip(no_web_dir_ids, no_web_dir_download_counts if metric == 'deps' else no_web_dir_dep_counts,
+                                   no_web_dir_route_counts, no_web_dir_pip_nonos_counts)),
+                hovertemplate=no_web_hover
+            ))
+
+        # Add trace for nodes with web directories (green)
+        if web_dir_ranks:
+            fig.add_trace(go.Bar(
+                x=web_dir_ranks,
+                y=web_dir_downloads,
+                name='Has Web Directory',
+                marker=dict(
+                    color='#2ecc71',  # Green
+                    line=dict(width=0.5, color='#27ae60')
+                ),
+                text=web_dir_names,
+                textposition='auto',
+                customdata=list(zip(web_dir_ids, web_dir_download_counts if metric == 'deps' else web_dir_dep_counts,
+                                   web_dir_route_counts, web_dir_pip_nonos_counts)),
+                hovertemplate=web_hover
+            ))
+
         # Add visual indicator for nodes with routes (star markers on top of bars)
+        # These are added LAST so they appear on top of everything else
         if routes_ranks:
             fig.add_trace(go.Scatter(
                 x=routes_ranks,
@@ -481,27 +577,8 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 text=routes_names
             ))
 
-        # Build hover template for pip-nonos
-        if metric == 'deps':
-            pip_nonos_hover = ('<b>Rank #%{x}</b><br>' +
-                              'Dependencies: %{y}<br>' +
-                              'Name: %{text}<br>' +
-                              'ID: %{customdata[0]}<br>' +
-                              'Downloads: %{customdata[1]:,.0f}<br>' +
-                              'Pip Calls: %{customdata[2]}<br>' +
-                              'Web Directory: %{customdata[3]}<br>' +
-                              '<extra></extra>')
-        else:
-            pip_nonos_hover = ('<b>Rank #%{x}</b><br>' +
-                              'Downloads: %{y:,.0f}<br>' +
-                              'Name: %{text}<br>' +
-                              'ID: %{customdata[0]}<br>' +
-                              'Dependencies: %{customdata[1]}<br>' +
-                              'Pip Calls: %{customdata[2]}<br>' +
-                              'Web Directory: %{customdata[3]}<br>' +
-                              '<extra></extra>')
-
         # Add visual indicator for nodes with pip-nonos (diamond markers on top of bars)
+        # These are added LAST so they appear on top of everything else
         if pip_nonos_ranks:
             fig.add_trace(go.Scatter(
                 x=pip_nonos_ranks,
@@ -515,7 +592,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     line=dict(width=1, color='#d68910')
                 ),
                 customdata=list(zip(pip_nonos_ids, pip_nonos_download_counts if metric == 'deps' else pip_nonos_dep_counts,
-                                   pip_nonos_counts, pip_nonos_web_dir_status)),
+                                   pip_nonos_route_counts, pip_nonos_counts, pip_nonos_web_dir_status)),
                 hovertemplate=pip_nonos_hover,
                 text=pip_nonos_names
             ))
@@ -622,6 +699,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         no_web_dir_count = len(no_web_dir_ranks)
         routes_count = len(routes_ranks)
         pip_nonos_count = len(pip_nonos_ranks)
+        zero_deps_count = sum(1 for node in sorted_nodes if node_dep_counts.get(node[0], 0) == 0)
 
         print(f"\nStatistics:")
         print(f"  Total nodes: {total_nodes:,}")
@@ -629,6 +707,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         print(f"  Nodes without web directories: {no_web_dir_count:,} ({no_web_dir_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
         print(f"  Nodes with routes: {routes_count:,} ({routes_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
         print(f"  Nodes with pip calls: {pip_nonos_count:,} ({pip_nonos_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
+        print(f"  Nodes with zero dependencies: {zero_deps_count:,} ({zero_deps_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
 
         if metric == 'deps':
             print(f"  Total dependencies across all nodes: {total_deps_sum:,}")
