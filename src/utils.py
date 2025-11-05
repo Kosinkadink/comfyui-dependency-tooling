@@ -205,10 +205,16 @@ def load_csv_data_to_nodes(nodes_dict, csv_directory, node_key):
         return 0
 
     # Parse all CSV files and collect data
+    # Use a loop to merge sets from multiple CSV files for the same repo
     all_data = {}
     for csv_file in csv_files:
         csv_data = parse_python_files_csv(csv_file)
-        all_data.update(csv_data)
+        for repo, files in csv_data.items():
+            if repo in all_data:
+                # Merge file sets if repo already exists
+                all_data[repo].update(files)
+            else:
+                all_data[repo] = files
 
     # Map repository URLs to node IDs and add to nodes_dict
     count = 0
