@@ -1362,11 +1362,16 @@ def interactive_mode(nodes_dict):
                 # Parse &nodes modifier first to filter by specific nodes
                 working_nodes = parse_nodes_modifier(query, working_nodes)
 
+                # Track if we filtered by specific nodes (for percentile calculation)
+                is_nodes_filter = '&nodes' in query.lower()
+
                 # Parse &save modifier
                 if '&save' in query.lower():
                     save_results = True
 
                 # Parse &top modifier if present
+                # Keep reference to full dataset before &top filtering (for percentile calculation)
+                full_nodes_for_percentiles = working_nodes if not is_nodes_filter else None
                 if '&top' in query.lower():
                     top_match = re.search(r'&top\s+(-?\d+)', query.lower())
                     if top_match:
@@ -1383,7 +1388,7 @@ def interactive_mode(nodes_dict):
 
                 # Create the appropriate graph type
                 if graph_type == 'downloads':
-                    create_downloads_graph(working_nodes, save_to_file=save_results, query_desc=original_query, log_scale=use_log_scale, show_indicators=show_indicators)
+                    create_downloads_graph(working_nodes, save_to_file=save_results, query_desc=original_query, log_scale=use_log_scale, show_indicators=show_indicators, full_nodes_for_percentiles=full_nodes_for_percentiles)
                 else:
                     create_cumulative_graph(working_nodes, save_to_file=save_results, query_desc=original_query)
 

@@ -193,16 +193,17 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph")
         return False
 
 
-def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False):
+def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False, full_nodes_for_percentiles=None):
     """
     Create and display a total downloads graph using plotly.
 
     Args:
-        nodes_dict: Dictionary of nodes
+        nodes_dict: Dictionary of nodes to display
         save_to_file: Whether to save the graph to a file
         query_desc: Query description for file naming and title
         log_scale: Whether to use logarithmic scale for y-axis
         show_indicators: Whether to show percentage milestone indicators
+        full_nodes_for_percentiles: Full dataset for calculating percentiles (when using &top filter)
 
     Returns:
         True if successful, False otherwise
@@ -223,12 +224,23 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         web_dir_names = []
         web_dir_ids = []
         web_dir_dep_counts = []
+        web_dir_route_counts = []
 
         no_web_dir_ranks = []
         no_web_dir_downloads = []
         no_web_dir_names = []
         no_web_dir_ids = []
         no_web_dir_dep_counts = []
+        no_web_dir_route_counts = []
+
+        # Track nodes with routes for visual indicator
+        routes_ranks = []
+        routes_downloads = []
+        routes_names = []
+        routes_ids = []
+        routes_counts = []
+        routes_dep_counts = []
+        routes_web_dir_status = []
 
         cumulative_downloads = []
 
@@ -248,8 +260,20 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     if deps and isinstance(deps, list):
                         dep_count = len(deps)
 
-            # Check if node has web directory
+            # Check if node has web directory and routes
             has_web_dir = bool(node_data.get('_web_directories'))
+            has_routes = bool(node_data.get('_routes'))
+            route_count = len(node_data.get('_routes', []))
+
+            # Track routes separately for visual indicator
+            if has_routes:
+                routes_ranks.append(i)
+                routes_downloads.append(download_count)
+                routes_names.append(node_data.get('name', node_id))
+                routes_ids.append(node_id)
+                routes_counts.append(route_count)
+                routes_dep_counts.append(dep_count)
+                routes_web_dir_status.append('Yes' if has_web_dir else 'No')
 
             # Append to appropriate lists
             if has_web_dir:
@@ -258,14 +282,22 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 web_dir_names.append(node_data.get('name', node_id))
                 web_dir_ids.append(node_id)
                 web_dir_dep_counts.append(dep_count)
+                web_dir_route_counts.append(route_count)
             else:
                 no_web_dir_ranks.append(i)
                 no_web_dir_downloads.append(download_count)
                 no_web_dir_names.append(node_data.get('name', node_id))
                 no_web_dir_ids.append(node_id)
                 no_web_dir_dep_counts.append(dep_count)
+                no_web_dir_route_counts.append(route_count)
 
-        # Calculate percentage milestones
+        # Calculate percentage milestones based on full dataset if provided
+        # This ensures that when using &top filter, percentiles are relative to ALL downloads
+        if full_nodes_for_percentiles is not None:
+            total_downloads_for_percentiles = sum(node.get('downloads', 0) for node in full_nodes_for_percentiles.values())
+        else:
+            total_downloads_for_percentiles = total_downloads
+
         milestones = {
             50: None,
             75: None,
@@ -274,7 +306,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         }
 
         for i, cum_downloads in enumerate(cumulative_downloads):
-            percentage = (cum_downloads / total_downloads * 100) if total_downloads > 0 else 0
+            percentage = (cum_downloads / total_downloads_for_percentiles * 100) if total_downloads_for_percentiles > 0 else 0
             for milestone in milestones:
                 if milestones[milestone] is None and percentage >= milestone:
                     milestones[milestone] = i
@@ -294,12 +326,13 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 ),
                 text=no_web_dir_names,
                 textposition='auto',
-                customdata=list(zip(no_web_dir_ids, no_web_dir_dep_counts)),
+                customdata=list(zip(no_web_dir_ids, no_web_dir_dep_counts, no_web_dir_route_counts)),
                 hovertemplate='<b>Rank #%{x}</b><br>' +
                              'Downloads: %{y:,.0f}<br>' +
                              'Name: %{text}<br>' +
                              'ID: %{customdata[0]}<br>' +
                              'Dependencies: %{customdata[1]}<br>' +
+                             'Routes: %{customdata[2]}<br>' +
                              'Web Directory: No<br>' +
                              '<extra></extra>'
             ))
@@ -316,14 +349,40 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 ),
                 text=web_dir_names,
                 textposition='auto',
-                customdata=list(zip(web_dir_ids, web_dir_dep_counts)),
+                customdata=list(zip(web_dir_ids, web_dir_dep_counts, web_dir_route_counts)),
                 hovertemplate='<b>Rank #%{x}</b><br>' +
                              'Downloads: %{y:,.0f}<br>' +
                              'Name: %{text}<br>' +
                              'ID: %{customdata[0]}<br>' +
                              'Dependencies: %{customdata[1]}<br>' +
+                             'Routes: %{customdata[2]}<br>' +
                              'Web Directory: Yes<br>' +
                              '<extra></extra>'
+            ))
+
+        # Add visual indicator for nodes with routes (star markers on top of bars)
+        if routes_ranks:
+            fig.add_trace(go.Scatter(
+                x=routes_ranks,
+                y=routes_downloads,
+                mode='markers',
+                name='Has Routes',
+                marker=dict(
+                    symbol='star',
+                    size=8,
+                    color='#e74c3c',  # Red
+                    line=dict(width=1, color='#c0392b')
+                ),
+                customdata=list(zip(routes_ids, routes_dep_counts, routes_counts, routes_web_dir_status)),
+                hovertemplate='<b>Rank #%{x}</b><br>' +
+                             'Downloads: %{y:,.0f}<br>' +
+                             'Name: %{text}<br>' +
+                             'ID: %{customdata[0]}<br>' +
+                             'Dependencies: %{customdata[1]}<br>' +
+                             'Routes: %{customdata[2]}<br>' +
+                             'Web Directory: %{customdata[3]}<br>' +
+                             '<extra></extra>',
+                text=routes_names
             ))
 
         # Build title based on query
@@ -417,11 +476,13 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         total_downloads_sum = sum(node[1].get('downloads', 0) for node in sorted_nodes)
         web_dir_count = len(web_dir_ranks)
         no_web_dir_count = len(no_web_dir_ranks)
+        routes_count = len(routes_ranks)
 
         print(f"\nStatistics:")
         print(f"  Total nodes: {total_nodes:,}")
         print(f"  Nodes with web directories: {web_dir_count:,} ({web_dir_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
         print(f"  Nodes without web directories: {no_web_dir_count:,} ({no_web_dir_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
+        print(f"  Nodes with routes: {routes_count:,} ({routes_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
         print(f"  Total downloads across all nodes: {total_downloads_sum:,}")
         print(f"  Average downloads per node: {total_downloads_sum // total_nodes:,}" if total_nodes > 0 else "N/A")
         if sorted_nodes:
@@ -433,7 +494,10 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
 
         # Show download percentage milestones if indicators were shown
         if show_indicators:
-            print(f"\nDownload percentage milestones:")
+            if full_nodes_for_percentiles is not None:
+                print(f"\nDownload percentage milestones (relative to total {total_downloads_for_percentiles:,} downloads across all nodes):")
+            else:
+                print(f"\nDownload percentage milestones:")
             for percentage, node_index in sorted(milestones.items()):
                 if node_index is not None:
                     print(f"  {percentage}% of downloads: Top {node_index + 1} nodes")
