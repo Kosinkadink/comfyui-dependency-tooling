@@ -825,6 +825,20 @@ def load_routes_data(nodes_dict):
     return load_csv_data_to_nodes(nodes_dict, 'route-any', '_routes')
 
 
+def load_pip_nonos_data(nodes_dict):
+    """
+    Load pip direct call data from CSV files in pip-nonos folder.
+    Maps repository URLs to node IDs and adds pip call info directly to nodes_dict.
+
+    Args:
+        nodes_dict: Dictionary of all nodes (modified in place)
+
+    Returns:
+        Number of nodes with pip-nonos data
+    """
+    return load_csv_data_to_nodes(nodes_dict, 'pip-nonos', '_pip_nonos')
+
+
 def load_all_cached_requirements(nodes_dict, original_deps_backup):
     """
     Load all cached requirements.txt files on startup.
@@ -1297,6 +1311,11 @@ def interactive_mode(nodes_dict):
     routes_count = load_routes_data(nodes_dict)
     if routes_count > 0:
         print(f"[Loaded routes data for {routes_count} nodes]")
+
+    # Load pip-nonos data from CSV files
+    pip_nonos_count = load_pip_nonos_data(nodes_dict)
+    if pip_nonos_count > 0:
+        print(f"[Loaded pip direct call data for {pip_nonos_count} nodes]")
 
     # Pre-compile all dependencies for quick lookup
     dep_analysis = compile_dependencies(nodes_dict)

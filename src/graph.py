@@ -225,6 +225,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         web_dir_ids = []
         web_dir_dep_counts = []
         web_dir_route_counts = []
+        web_dir_pip_nonos_counts = []
 
         no_web_dir_ranks = []
         no_web_dir_downloads = []
@@ -232,6 +233,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         no_web_dir_ids = []
         no_web_dir_dep_counts = []
         no_web_dir_route_counts = []
+        no_web_dir_pip_nonos_counts = []
 
         # Track nodes with routes for visual indicator
         routes_ranks = []
@@ -241,6 +243,15 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         routes_counts = []
         routes_dep_counts = []
         routes_web_dir_status = []
+
+        # Track nodes with pip-nonos for visual indicator
+        pip_nonos_ranks = []
+        pip_nonos_downloads = []
+        pip_nonos_names = []
+        pip_nonos_ids = []
+        pip_nonos_counts = []
+        pip_nonos_dep_counts = []
+        pip_nonos_web_dir_status = []
 
         cumulative_downloads = []
 
@@ -260,10 +271,12 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     if deps and isinstance(deps, list):
                         dep_count = len(deps)
 
-            # Check if node has web directory and routes
+            # Check if node has web directory, routes, and pip-nonos
             has_web_dir = bool(node_data.get('_web_directories'))
             has_routes = bool(node_data.get('_routes'))
             route_count = len(node_data.get('_routes', []))
+            has_pip_nonos = bool(node_data.get('_pip_nonos'))
+            pip_nonos_count = len(node_data.get('_pip_nonos', []))
 
             # Track routes separately for visual indicator
             if has_routes:
@@ -275,6 +288,16 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 routes_dep_counts.append(dep_count)
                 routes_web_dir_status.append('Yes' if has_web_dir else 'No')
 
+            # Track pip-nonos separately for visual indicator
+            if has_pip_nonos:
+                pip_nonos_ranks.append(i)
+                pip_nonos_downloads.append(download_count)
+                pip_nonos_names.append(node_data.get('name', node_id))
+                pip_nonos_ids.append(node_id)
+                pip_nonos_counts.append(pip_nonos_count)
+                pip_nonos_dep_counts.append(dep_count)
+                pip_nonos_web_dir_status.append('Yes' if has_web_dir else 'No')
+
             # Append to appropriate lists
             if has_web_dir:
                 web_dir_ranks.append(i)
@@ -283,6 +306,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 web_dir_ids.append(node_id)
                 web_dir_dep_counts.append(dep_count)
                 web_dir_route_counts.append(route_count)
+                web_dir_pip_nonos_counts.append(pip_nonos_count)
             else:
                 no_web_dir_ranks.append(i)
                 no_web_dir_downloads.append(download_count)
@@ -290,6 +314,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 no_web_dir_ids.append(node_id)
                 no_web_dir_dep_counts.append(dep_count)
                 no_web_dir_route_counts.append(route_count)
+                no_web_dir_pip_nonos_counts.append(pip_nonos_count)
 
         # Calculate percentage milestones based on full dataset if provided
         # This ensures that when using &top filter, percentiles are relative to ALL downloads
@@ -326,13 +351,14 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 ),
                 text=no_web_dir_names,
                 textposition='auto',
-                customdata=list(zip(no_web_dir_ids, no_web_dir_dep_counts, no_web_dir_route_counts)),
+                customdata=list(zip(no_web_dir_ids, no_web_dir_dep_counts, no_web_dir_route_counts, no_web_dir_pip_nonos_counts)),
                 hovertemplate='<b>Rank #%{x}</b><br>' +
                              'Downloads: %{y:,.0f}<br>' +
                              'Name: %{text}<br>' +
                              'ID: %{customdata[0]}<br>' +
                              'Dependencies: %{customdata[1]}<br>' +
                              'Routes: %{customdata[2]}<br>' +
+                             'Pip Calls: %{customdata[3]}<br>' +
                              'Web Directory: No<br>' +
                              '<extra></extra>'
             ))
@@ -349,13 +375,14 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 ),
                 text=web_dir_names,
                 textposition='auto',
-                customdata=list(zip(web_dir_ids, web_dir_dep_counts, web_dir_route_counts)),
+                customdata=list(zip(web_dir_ids, web_dir_dep_counts, web_dir_route_counts, web_dir_pip_nonos_counts)),
                 hovertemplate='<b>Rank #%{x}</b><br>' +
                              'Downloads: %{y:,.0f}<br>' +
                              'Name: %{text}<br>' +
                              'ID: %{customdata[0]}<br>' +
                              'Dependencies: %{customdata[1]}<br>' +
                              'Routes: %{customdata[2]}<br>' +
+                             'Pip Calls: %{customdata[3]}<br>' +
                              'Web Directory: Yes<br>' +
                              '<extra></extra>'
             ))
@@ -383,6 +410,31 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                              'Web Directory: %{customdata[3]}<br>' +
                              '<extra></extra>',
                 text=routes_names
+            ))
+
+        # Add visual indicator for nodes with pip-nonos (diamond markers on top of bars)
+        if pip_nonos_ranks:
+            fig.add_trace(go.Scatter(
+                x=pip_nonos_ranks,
+                y=pip_nonos_downloads,
+                mode='markers',
+                name='Has Pip Calls',
+                marker=dict(
+                    symbol='diamond',
+                    size=8,
+                    color='#f39c12',  # Orange
+                    line=dict(width=1, color='#d68910')
+                ),
+                customdata=list(zip(pip_nonos_ids, pip_nonos_dep_counts, pip_nonos_counts, pip_nonos_web_dir_status)),
+                hovertemplate='<b>Rank #%{x}</b><br>' +
+                             'Downloads: %{y:,.0f}<br>' +
+                             'Name: %{text}<br>' +
+                             'ID: %{customdata[0]}<br>' +
+                             'Dependencies: %{customdata[1]}<br>' +
+                             'Pip Calls: %{customdata[2]}<br>' +
+                             'Web Directory: %{customdata[3]}<br>' +
+                             '<extra></extra>',
+                text=pip_nonos_names
             ))
 
         # Build title based on query
@@ -477,12 +529,14 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         web_dir_count = len(web_dir_ranks)
         no_web_dir_count = len(no_web_dir_ranks)
         routes_count = len(routes_ranks)
+        pip_nonos_count = len(pip_nonos_ranks)
 
         print(f"\nStatistics:")
         print(f"  Total nodes: {total_nodes:,}")
         print(f"  Nodes with web directories: {web_dir_count:,} ({web_dir_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
         print(f"  Nodes without web directories: {no_web_dir_count:,} ({no_web_dir_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
         print(f"  Nodes with routes: {routes_count:,} ({routes_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
+        print(f"  Nodes with pip calls: {pip_nonos_count:,} ({pip_nonos_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
         print(f"  Total downloads across all nodes: {total_downloads_sum:,}")
         print(f"  Average downloads per node: {total_downloads_sum // total_nodes:,}" if total_nodes > 0 else "N/A")
         if sorted_nodes:
