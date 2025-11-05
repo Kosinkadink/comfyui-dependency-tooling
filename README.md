@@ -156,18 +156,18 @@ Fetch the latest nodes data from the ComfyUI registry and update the local `node
 Create interactive visualizations of node data using plotly.
 - Opens graphs in your default web browser
 - Supports all modifiers (&save, &top, &nodes)
-- Two types of visualizations available:
+- Three types of visualizations available:
 
 **Cumulative Dependencies Graph:**
 Shows how unique dependencies accumulate as nodes are added by rank.
 ```bash
-> /graph              # Show cumulative dependencies
-> /graph &top 100     # Show for top 100 nodes
-> /graph &save        # Save to HTML file
+> /graph cumulative          # Show cumulative dependencies
+> /graph cumulative &top 100 # Show for top 100 nodes
+> /graph cumulative &save    # Save to HTML file
 ```
 
 **Total Downloads Graph:**
-Displays total downloads per node pack, sorted by rank.
+Displays total downloads per node pack, sorted by rank (popularity).
 ```bash
 > /graph downloads                  # Linear scale (default)
 > /graph downloads log              # Logarithmic scale
@@ -181,6 +181,20 @@ The downloads graph supports:
   - Linear scale (default): Shows true proportional differences
   - Logarithmic scale: Useful for datasets with large ranges
 - **Percentage indicators** (optional): Shows vertical markers at nodes that account for 50%, 75%, 90%, and 99% of total downloads, helping visualize download concentration
+
+**Dependency Count Graph:**
+Displays dependency count per node pack, sorted by rank (popularity).
+```bash
+> /graph deps              # Show dependency counts (linear scale only)
+> /graph deps &top 50      # Top 50 nodes only
+> /graph deps &save        # Save to HTML file
+```
+
+The deps graph:
+- Shows dependency count on y-axis
+- Nodes ranked by downloads (same as downloads graph)
+- Useful for visualizing dependency patterns across popularity rankings
+- Does not support log scale (dependency counts are relatively low)
 
 ### `/help`
 Display help information about available commands and modifiers.
@@ -345,11 +359,13 @@ python analysis.py -e "//list &nodes file:my_nodes.txt &dupes"
 
 ### Create visualization graphs
 ```bash
-python analysis.py -e "//graph &top 100"                      # Cumulative dependencies for top 100
+python analysis.py -e "//graph cumulative &top 100"           # Cumulative dependencies for top 100
 python analysis.py -e "//graph downloads &save"               # Downloads graph saved to HTML
 python analysis.py -e "//graph downloads log &top 50"         # Log scale downloads for top 50
 python analysis.py -e "//graph downloads indicators"          # Downloads with percentage milestones
 python analysis.py -e "//graph downloads log indicators &save" # Log scale with indicators, saved
+python analysis.py -e "//graph deps"                          # Dependency count graph
+python analysis.py -e "//graph deps &top 100 &save"           # Deps for top 100, saved
 ```
 
 ### View dependency information for a specific node
@@ -393,8 +409,9 @@ $ python analysis.py
 > /nodes &routes &top 10   # Show top 10 nodes with routes
 > /nodes comfyui-kjnodes &update-reqs  # Update deps from requirements.txt
 > /nodes &top 5 &update-reqs  # Update top 5 nodes with actual requirements
-> /graph             # View cumulative dependencies graph
+> /graph cumulative  # View cumulative dependencies graph
 > /graph downloads log  # View downloads with log scale
+> /graph deps        # View dependency counts by popularity rank
 > numpy &nodes comfyui-kjnodes,rgthree-comfy  # Check numpy in specific nodes
 > /quit              # Exit
 ```

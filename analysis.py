@@ -11,7 +11,7 @@ from pathlib import Path
 from collections import defaultdict
 
 # Import from src modules
-from src.graph import create_cumulative_graph, create_downloads_graph
+from src.graph import create_cumulative_graph, create_downloads_graph, create_deps_graph
 from src.utils import (parse_dependency_string,
                        create_timestamped_filepath, load_csv_data_to_nodes)
 
@@ -1226,11 +1226,12 @@ def print_help():
     print("  /nodes <node_id> - Show detailed dependency info for a specific node")
     print("  /nodes <search>! - Auto-select first matching node (fuzzy search)")
     print("  /update - Fetch latest nodes from registry and update nodes.json")
-    print("  /graph - Create cumulative dependencies visualization")
+    print("  /graph cumulative - Create cumulative dependencies visualization")
     print("  /graph downloads - Create total downloads visualization (linear scale)")
     print("  /graph downloads log - Create total downloads visualization (log scale)")
     print("  /graph downloads indicators - Show with percentage milestones (50%, 75%, 90%, 99%)")
     print("  /graph downloads log indicators - Log scale with percentage milestones")
+    print("  /graph deps - Create dependency count visualization")
     print("  /summary - Show overall dependency analysis summary")
     print("  /help  - Show this help message")
     print("  /quit  - Exit interactive mode")
@@ -1358,18 +1359,31 @@ def interactive_mode(nodes_dict):
 
             elif query.lower() == '/graph' or query.lower().startswith('/graph '):
                 # Parse modifiers for /graph command
+                query_words = query.lower().split()
+
+                # Require a graph type (cumulative, downloads, or deps)
+                if query.lower().strip() == '/graph':
+                    print("Error: /graph requires a type (cumulative, downloads, or deps)")
+                    print("Usage:")
+                    print("  /graph cumulative - Cumulative dependencies graph")
+                    print("  /graph downloads - Downloads graph")
+                    print("  /graph deps - Dependency count graph")
+                    print("See /help for more options")
+                    continue
+
                 save_results = False
                 top_n = None
                 working_nodes = nodes_dict
                 original_query = query
 
-                # Check if it's a downloads graph and check for log scale and indicators
-                graph_type = 'dependencies'
+                # Check graph type
+                graph_type = None
                 use_log_scale = False
                 show_indicators = False
-                query_words = query.lower().split()
 
-                if 'downloads' in query_words:
+                if 'cumulative' in query_words:
+                    graph_type = 'dependencies'
+                elif 'downloads' in query_words:
                     graph_type = 'downloads'
                     # Check for log scale option
                     if 'log' in query_words:
@@ -1377,6 +1391,15 @@ def interactive_mode(nodes_dict):
                     # Check for indicators option
                     if 'indicators' in query_words:
                         show_indicators = True
+                elif 'deps' in query_words:
+                    graph_type = 'deps'
+                else:
+                    print("Error: Unknown graph type. Use 'cumulative', 'downloads', or 'deps'")
+                    print("Usage:")
+                    print("  /graph cumulative - Cumulative dependencies graph")
+                    print("  /graph downloads - Downloads graph")
+                    print("  /graph deps - Dependency count graph")
+                    continue
 
                 # Parse &nodes modifier first to filter by specific nodes
                 working_nodes = parse_nodes_modifier(query, working_nodes)
@@ -1408,6 +1431,8 @@ def interactive_mode(nodes_dict):
                 # Create the appropriate graph type
                 if graph_type == 'downloads':
                     create_downloads_graph(working_nodes, save_to_file=save_results, query_desc=original_query, log_scale=use_log_scale, show_indicators=show_indicators, full_nodes_for_percentiles=full_nodes_for_percentiles)
+                elif graph_type == 'deps':
+                    create_deps_graph(working_nodes, save_to_file=save_results, query_desc=original_query, full_nodes_for_percentiles=full_nodes_for_percentiles)
                 else:
                     create_cumulative_graph(working_nodes, save_to_file=save_results, query_desc=original_query)
 

@@ -89,7 +89,7 @@ def calculate_cumulative_dependencies(nodes_dict):
     return node_counts, cumulative_deps, node_names, node_dep_counts
 
 
-def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph"):
+def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph cumulative"):
     """
     Create and display a cumulative dependencies graph using plotly.
 
@@ -193,17 +193,18 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph")
         return False
 
 
-def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False, full_nodes_for_percentiles=None):
+def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False, full_nodes_for_percentiles=None, metric='downloads'):
     """
-    Create and display a total downloads graph using plotly.
+    Create and display a graph showing downloads or dependency counts using plotly.
 
     Args:
         nodes_dict: Dictionary of nodes to display
         save_to_file: Whether to save the graph to a file
         query_desc: Query description for file naming and title
-        log_scale: Whether to use logarithmic scale for y-axis
-        show_indicators: Whether to show percentage milestone indicators
-        full_nodes_for_percentiles: Full dataset for calculating percentiles (when using &top filter)
+        log_scale: Whether to use logarithmic scale for y-axis (downloads only)
+        show_indicators: Whether to show percentage milestone indicators (downloads only)
+        full_nodes_for_percentiles: Full dataset for calculating percentiles (when using &top filter, downloads only)
+        metric: 'downloads' or 'deps' - which metric to display on y-axis
 
     Returns:
         True if successful, False otherwise
@@ -213,57 +214,14 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         return False
 
     try:
-        print("Creating downloads graph...")
+        if metric == 'deps':
+            print("Creating dependency count graph...")
+        else:
+            print("Creating downloads graph...")
 
-        # Sort nodes by downloads (rank)
-        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
-
-        # Separate lists for nodes with and without web directories
-        web_dir_ranks = []
-        web_dir_downloads = []
-        web_dir_names = []
-        web_dir_ids = []
-        web_dir_dep_counts = []
-        web_dir_route_counts = []
-        web_dir_pip_nonos_counts = []
-
-        no_web_dir_ranks = []
-        no_web_dir_downloads = []
-        no_web_dir_names = []
-        no_web_dir_ids = []
-        no_web_dir_dep_counts = []
-        no_web_dir_route_counts = []
-        no_web_dir_pip_nonos_counts = []
-
-        # Track nodes with routes for visual indicator
-        routes_ranks = []
-        routes_downloads = []
-        routes_names = []
-        routes_ids = []
-        routes_counts = []
-        routes_dep_counts = []
-        routes_web_dir_status = []
-
-        # Track nodes with pip-nonos for visual indicator
-        pip_nonos_ranks = []
-        pip_nonos_downloads = []
-        pip_nonos_names = []
-        pip_nonos_ids = []
-        pip_nonos_counts = []
-        pip_nonos_dep_counts = []
-        pip_nonos_web_dir_status = []
-
-        cumulative_downloads = []
-
-        total_downloads = sum(node[1].get('downloads', 0) for node in sorted_nodes)
-        running_total = 0
-
-        for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
-            download_count = node_data.get('downloads', 0)
-            running_total += download_count
-            cumulative_downloads.append(running_total)
-
-            # Count dependencies (excluding comments and pip commands)
+        # Calculate dependency counts for all nodes (needed for sorting if metric='deps')
+        node_dep_counts = {}
+        for node_id, node_data in nodes_dict.items():
             dep_count = 0
             if 'latest_version' in node_data and node_data['latest_version']:
                 if 'dependencies' in node_data['latest_version']:
@@ -274,6 +232,65 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                             # Only count actual dependencies (not comments or pip commands)
                             if not parsed['skip'] and not parsed['is_pip_command']:
                                 dep_count += 1
+            node_dep_counts[node_id] = dep_count
+
+        # Always sort nodes by downloads (popularity ranking)
+        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+
+        # Separate lists for nodes with and without web directories
+        # Note: *_downloads lists contain y-axis values (downloads or deps based on metric)
+        web_dir_ranks = []
+        web_dir_downloads = []  # y-axis values
+        web_dir_names = []
+        web_dir_ids = []
+        web_dir_dep_counts = []
+        web_dir_download_counts = []  # actual downloads for hover
+        web_dir_route_counts = []
+        web_dir_pip_nonos_counts = []
+
+        no_web_dir_ranks = []
+        no_web_dir_downloads = []  # y-axis values
+        no_web_dir_names = []
+        no_web_dir_ids = []
+        no_web_dir_dep_counts = []
+        no_web_dir_download_counts = []  # actual downloads for hover
+        no_web_dir_route_counts = []
+        no_web_dir_pip_nonos_counts = []
+
+        # Track nodes with routes for visual indicator
+        routes_ranks = []
+        routes_downloads = []  # y-axis values
+        routes_names = []
+        routes_ids = []
+        routes_counts = []
+        routes_dep_counts = []
+        routes_download_counts = []  # actual downloads for hover
+        routes_web_dir_status = []
+
+        # Track nodes with pip-nonos for visual indicator
+        pip_nonos_ranks = []
+        pip_nonos_downloads = []  # y-axis values
+        pip_nonos_names = []
+        pip_nonos_ids = []
+        pip_nonos_counts = []
+        pip_nonos_dep_counts = []
+        pip_nonos_download_counts = []  # actual downloads for hover
+        pip_nonos_web_dir_status = []
+
+        cumulative_downloads = []
+
+        total_downloads = sum(node[1].get('downloads', 0) for node in sorted_nodes)
+        running_total = 0
+
+        for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
+            download_count = node_data.get('downloads', 0)
+            dep_count = node_dep_counts.get(node_id, 0)
+
+            # Use the appropriate metric for y-axis values
+            y_value = dep_count if metric == 'deps' else download_count
+
+            running_total += download_count
+            cumulative_downloads.append(running_total)
 
             # Check if node has web directory, routes, and pip-nonos
             has_web_dir = bool(node_data.get('_web_directories'))
@@ -285,38 +302,42 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             # Track routes separately for visual indicator
             if has_routes:
                 routes_ranks.append(i)
-                routes_downloads.append(download_count)
+                routes_downloads.append(y_value)  # y_value is download_count or dep_count based on metric
                 routes_names.append(node_data.get('name', node_id))
                 routes_ids.append(node_id)
                 routes_counts.append(route_count)
                 routes_dep_counts.append(dep_count)
+                routes_download_counts.append(download_count)
                 routes_web_dir_status.append('Yes' if has_web_dir else 'No')
 
             # Track pip-nonos separately for visual indicator
             if has_pip_nonos:
                 pip_nonos_ranks.append(i)
-                pip_nonos_downloads.append(download_count)
+                pip_nonos_downloads.append(y_value)  # y_value is download_count or dep_count based on metric
                 pip_nonos_names.append(node_data.get('name', node_id))
                 pip_nonos_ids.append(node_id)
                 pip_nonos_counts.append(pip_nonos_count)
                 pip_nonos_dep_counts.append(dep_count)
+                pip_nonos_download_counts.append(download_count)
                 pip_nonos_web_dir_status.append('Yes' if has_web_dir else 'No')
 
             # Append to appropriate lists
             if has_web_dir:
                 web_dir_ranks.append(i)
-                web_dir_downloads.append(download_count)
+                web_dir_downloads.append(y_value)  # y_value is download_count or dep_count based on metric
                 web_dir_names.append(node_data.get('name', node_id))
                 web_dir_ids.append(node_id)
                 web_dir_dep_counts.append(dep_count)
+                web_dir_download_counts.append(download_count)
                 web_dir_route_counts.append(route_count)
                 web_dir_pip_nonos_counts.append(pip_nonos_count)
             else:
                 no_web_dir_ranks.append(i)
-                no_web_dir_downloads.append(download_count)
+                no_web_dir_downloads.append(y_value)  # y_value is download_count or dep_count based on metric
                 no_web_dir_names.append(node_data.get('name', node_id))
                 no_web_dir_ids.append(node_id)
                 no_web_dir_dep_counts.append(dep_count)
+                no_web_dir_download_counts.append(download_count)
                 no_web_dir_route_counts.append(route_count)
                 no_web_dir_pip_nonos_counts.append(pip_nonos_count)
 
@@ -343,6 +364,28 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         # Create the figure
         fig = go.Figure()
 
+        # Build hover template based on metric
+        if metric == 'deps':
+            no_web_hover = ('<b>Rank #%{x}</b><br>' +
+                           'Dependencies: %{y}<br>' +
+                           'Name: %{text}<br>' +
+                           'ID: %{customdata[0]}<br>' +
+                           'Downloads: %{customdata[1]:,.0f}<br>' +
+                           'Routes: %{customdata[2]}<br>' +
+                           'Pip Calls: %{customdata[3]}<br>' +
+                           'Web Directory: No<br>' +
+                           '<extra></extra>')
+        else:
+            no_web_hover = ('<b>Rank #%{x}</b><br>' +
+                           'Downloads: %{y:,.0f}<br>' +
+                           'Name: %{text}<br>' +
+                           'ID: %{customdata[0]}<br>' +
+                           'Dependencies: %{customdata[1]}<br>' +
+                           'Routes: %{customdata[2]}<br>' +
+                           'Pip Calls: %{customdata[3]}<br>' +
+                           'Web Directory: No<br>' +
+                           '<extra></extra>')
+
         # Add trace for nodes without web directories (blue)
         if no_web_dir_ranks:
             fig.add_trace(go.Bar(
@@ -355,17 +398,32 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 ),
                 text=no_web_dir_names,
                 textposition='auto',
-                customdata=list(zip(no_web_dir_ids, no_web_dir_dep_counts, no_web_dir_route_counts, no_web_dir_pip_nonos_counts)),
-                hovertemplate='<b>Rank #%{x}</b><br>' +
-                             'Downloads: %{y:,.0f}<br>' +
-                             'Name: %{text}<br>' +
-                             'ID: %{customdata[0]}<br>' +
-                             'Dependencies: %{customdata[1]}<br>' +
-                             'Routes: %{customdata[2]}<br>' +
-                             'Pip Calls: %{customdata[3]}<br>' +
-                             'Web Directory: No<br>' +
-                             '<extra></extra>'
+                customdata=list(zip(no_web_dir_ids, no_web_dir_download_counts if metric == 'deps' else no_web_dir_dep_counts,
+                                   no_web_dir_route_counts, no_web_dir_pip_nonos_counts)),
+                hovertemplate=no_web_hover
             ))
+
+        # Build hover template for web directory nodes
+        if metric == 'deps':
+            web_hover = ('<b>Rank #%{x}</b><br>' +
+                        'Dependencies: %{y}<br>' +
+                        'Name: %{text}<br>' +
+                        'ID: %{customdata[0]}<br>' +
+                        'Downloads: %{customdata[1]:,.0f}<br>' +
+                        'Routes: %{customdata[2]}<br>' +
+                        'Pip Calls: %{customdata[3]}<br>' +
+                        'Web Directory: Yes<br>' +
+                        '<extra></extra>')
+        else:
+            web_hover = ('<b>Rank #%{x}</b><br>' +
+                        'Downloads: %{y:,.0f}<br>' +
+                        'Name: %{text}<br>' +
+                        'ID: %{customdata[0]}<br>' +
+                        'Dependencies: %{customdata[1]}<br>' +
+                        'Routes: %{customdata[2]}<br>' +
+                        'Pip Calls: %{customdata[3]}<br>' +
+                        'Web Directory: Yes<br>' +
+                        '<extra></extra>')
 
         # Add trace for nodes with web directories (green)
         if web_dir_ranks:
@@ -379,17 +437,30 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 ),
                 text=web_dir_names,
                 textposition='auto',
-                customdata=list(zip(web_dir_ids, web_dir_dep_counts, web_dir_route_counts, web_dir_pip_nonos_counts)),
-                hovertemplate='<b>Rank #%{x}</b><br>' +
-                             'Downloads: %{y:,.0f}<br>' +
-                             'Name: %{text}<br>' +
-                             'ID: %{customdata[0]}<br>' +
-                             'Dependencies: %{customdata[1]}<br>' +
-                             'Routes: %{customdata[2]}<br>' +
-                             'Pip Calls: %{customdata[3]}<br>' +
-                             'Web Directory: Yes<br>' +
-                             '<extra></extra>'
+                customdata=list(zip(web_dir_ids, web_dir_download_counts if metric == 'deps' else web_dir_dep_counts,
+                                   web_dir_route_counts, web_dir_pip_nonos_counts)),
+                hovertemplate=web_hover
             ))
+
+        # Build hover template for routes
+        if metric == 'deps':
+            routes_hover = ('<b>Rank #%{x}</b><br>' +
+                           'Dependencies: %{y}<br>' +
+                           'Name: %{text}<br>' +
+                           'ID: %{customdata[0]}<br>' +
+                           'Downloads: %{customdata[1]:,.0f}<br>' +
+                           'Routes: %{customdata[2]}<br>' +
+                           'Web Directory: %{customdata[3]}<br>' +
+                           '<extra></extra>')
+        else:
+            routes_hover = ('<b>Rank #%{x}</b><br>' +
+                           'Downloads: %{y:,.0f}<br>' +
+                           'Name: %{text}<br>' +
+                           'ID: %{customdata[0]}<br>' +
+                           'Dependencies: %{customdata[1]}<br>' +
+                           'Routes: %{customdata[2]}<br>' +
+                           'Web Directory: %{customdata[3]}<br>' +
+                           '<extra></extra>')
 
         # Add visual indicator for nodes with routes (star markers on top of bars)
         if routes_ranks:
@@ -404,17 +475,31 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     color='#e74c3c',  # Red
                     line=dict(width=1, color='#c0392b')
                 ),
-                customdata=list(zip(routes_ids, routes_dep_counts, routes_counts, routes_web_dir_status)),
-                hovertemplate='<b>Rank #%{x}</b><br>' +
-                             'Downloads: %{y:,.0f}<br>' +
-                             'Name: %{text}<br>' +
-                             'ID: %{customdata[0]}<br>' +
-                             'Dependencies: %{customdata[1]}<br>' +
-                             'Routes: %{customdata[2]}<br>' +
-                             'Web Directory: %{customdata[3]}<br>' +
-                             '<extra></extra>',
+                customdata=list(zip(routes_ids, routes_download_counts if metric == 'deps' else routes_dep_counts,
+                                   routes_counts, routes_web_dir_status)),
+                hovertemplate=routes_hover,
                 text=routes_names
             ))
+
+        # Build hover template for pip-nonos
+        if metric == 'deps':
+            pip_nonos_hover = ('<b>Rank #%{x}</b><br>' +
+                              'Dependencies: %{y}<br>' +
+                              'Name: %{text}<br>' +
+                              'ID: %{customdata[0]}<br>' +
+                              'Downloads: %{customdata[1]:,.0f}<br>' +
+                              'Pip Calls: %{customdata[2]}<br>' +
+                              'Web Directory: %{customdata[3]}<br>' +
+                              '<extra></extra>')
+        else:
+            pip_nonos_hover = ('<b>Rank #%{x}</b><br>' +
+                              'Downloads: %{y:,.0f}<br>' +
+                              'Name: %{text}<br>' +
+                              'ID: %{customdata[0]}<br>' +
+                              'Dependencies: %{customdata[1]}<br>' +
+                              'Pip Calls: %{customdata[2]}<br>' +
+                              'Web Directory: %{customdata[3]}<br>' +
+                              '<extra></extra>')
 
         # Add visual indicator for nodes with pip-nonos (diamond markers on top of bars)
         if pip_nonos_ranks:
@@ -429,26 +514,27 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     color='#f39c12',  # Orange
                     line=dict(width=1, color='#d68910')
                 ),
-                customdata=list(zip(pip_nonos_ids, pip_nonos_dep_counts, pip_nonos_counts, pip_nonos_web_dir_status)),
-                hovertemplate='<b>Rank #%{x}</b><br>' +
-                             'Downloads: %{y:,.0f}<br>' +
-                             'Name: %{text}<br>' +
-                             'ID: %{customdata[0]}<br>' +
-                             'Dependencies: %{customdata[1]}<br>' +
-                             'Pip Calls: %{customdata[2]}<br>' +
-                             'Web Directory: %{customdata[3]}<br>' +
-                             '<extra></extra>',
+                customdata=list(zip(pip_nonos_ids, pip_nonos_download_counts if metric == 'deps' else pip_nonos_dep_counts,
+                                   pip_nonos_counts, pip_nonos_web_dir_status)),
+                hovertemplate=pip_nonos_hover,
                 text=pip_nonos_names
             ))
 
-        # Build title based on query
-        title = build_graph_title('Total Downloads by Node Rank', query_desc)
+        # Build title and axis labels based on metric
+        if metric == 'deps':
+            title = build_graph_title('Dependency Count by Node Rank', query_desc)
+            xaxis_title = 'Node Rank (sorted by popularity)'
+            yaxis_title = 'Number of Dependencies'
+        else:
+            title = build_graph_title('Total Downloads by Node Rank', query_desc)
+            xaxis_title = 'Node Rank (sorted by popularity)'
+            yaxis_title = 'Total Downloads' + (' (log scale)' if log_scale else '')
 
         # Update layout
         layout_params = {
             'title': title,
-            'xaxis_title': 'Node Rank (sorted by popularity)',
-            'yaxis_title': 'Total Downloads' + (' (log scale)' if log_scale else ''),
+            'xaxis_title': xaxis_title,
+            'yaxis_title': yaxis_title,
             'hovermode': 'closest',
             'showlegend': True,
             'legend': dict(
@@ -465,12 +551,13 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             'height': 700
         }
 
-        if log_scale:
+        # Only apply log scale for downloads metric
+        if log_scale and metric == 'downloads':
             layout_params['yaxis_type'] = 'log'
 
         fig.update_layout(**layout_params)
 
-        # Add percentage milestone annotations if requested
+        # Add percentage milestone annotations if requested (based on download percentages)
         if show_indicators:
             # Create a mapping of rank to downloads for milestone lookup
             rank_to_downloads = {}
@@ -530,6 +617,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         # Also show some statistics
         total_nodes = len(sorted_nodes)
         total_downloads_sum = sum(node[1].get('downloads', 0) for node in sorted_nodes)
+        total_deps_sum = sum(node_dep_counts.get(node[0], 0) for node in sorted_nodes)
         web_dir_count = len(web_dir_ranks)
         no_web_dir_count = len(no_web_dir_ranks)
         routes_count = len(routes_ranks)
@@ -541,14 +629,25 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         print(f"  Nodes without web directories: {no_web_dir_count:,} ({no_web_dir_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
         print(f"  Nodes with routes: {routes_count:,} ({routes_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
         print(f"  Nodes with pip calls: {pip_nonos_count:,} ({pip_nonos_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
-        print(f"  Total downloads across all nodes: {total_downloads_sum:,}")
-        print(f"  Average downloads per node: {total_downloads_sum // total_nodes:,}" if total_nodes > 0 else "N/A")
-        if sorted_nodes:
-            print(f"  Highest downloads (rank #1): {sorted_nodes[0][1].get('downloads', 0):,}")
-            if len(sorted_nodes) >= 10:
-                print(f"  Top 10 nodes downloads: {sum(node[1].get('downloads', 0) for node in sorted_nodes[:10]):,}")
-            if len(sorted_nodes) >= 100:
-                print(f"  Top 100 nodes downloads: {sum(node[1].get('downloads', 0) for node in sorted_nodes[:100]):,}")
+
+        if metric == 'deps':
+            print(f"  Total dependencies across all nodes: {total_deps_sum:,}")
+            print(f"  Average dependencies per node: {total_deps_sum // total_nodes:,}" if total_nodes > 0 else "N/A")
+            if sorted_nodes:
+                print(f"  Highest dependency count (rank #1): {node_dep_counts.get(sorted_nodes[0][0], 0):,}")
+                if len(sorted_nodes) >= 10:
+                    print(f"  Top 10 nodes total dependencies: {sum(node_dep_counts.get(node[0], 0) for node in sorted_nodes[:10]):,}")
+                if len(sorted_nodes) >= 100:
+                    print(f"  Top 100 nodes total dependencies: {sum(node_dep_counts.get(node[0], 0) for node in sorted_nodes[:100]):,}")
+        else:
+            print(f"  Total downloads across all nodes: {total_downloads_sum:,}")
+            print(f"  Average downloads per node: {total_downloads_sum // total_nodes:,}" if total_nodes > 0 else "N/A")
+            if sorted_nodes:
+                print(f"  Highest downloads (rank #1): {sorted_nodes[0][1].get('downloads', 0):,}")
+                if len(sorted_nodes) >= 10:
+                    print(f"  Top 10 nodes downloads: {sum(node[1].get('downloads', 0) for node in sorted_nodes[:10]):,}")
+                if len(sorted_nodes) >= 100:
+                    print(f"  Top 100 nodes downloads: {sum(node[1].get('downloads', 0) for node in sorted_nodes[:100]):,}")
 
         # Show download percentage milestones if indicators were shown
         if show_indicators:
@@ -567,3 +666,28 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
     except Exception as e:
         print(f"Error creating downloads graph: {e}")
         return False
+
+
+def create_deps_graph(nodes_dict, save_to_file=False, query_desc="/graph deps", full_nodes_for_percentiles=None):
+    """
+    Create and display a dependency count graph using plotly.
+    This is a convenience wrapper around create_downloads_graph() with metric='deps'.
+
+    Args:
+        nodes_dict: Dictionary of nodes to display
+        save_to_file: Whether to save the graph to a file
+        query_desc: Query description for file naming and title
+        full_nodes_for_percentiles: Full dataset for calculating percentiles (when using &top filter)
+
+    Returns:
+        True if successful, False otherwise
+    """
+    return create_downloads_graph(
+        nodes_dict=nodes_dict,
+        save_to_file=save_to_file,
+        query_desc=query_desc,
+        log_scale=False,
+        show_indicators=False,
+        full_nodes_for_percentiles=full_nodes_for_percentiles,
+        metric='deps'
+    )
