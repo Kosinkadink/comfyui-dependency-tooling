@@ -263,13 +263,17 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             running_total += download_count
             cumulative_downloads.append(running_total)
 
-            # Count dependencies
+            # Count dependencies (excluding comments and pip commands)
             dep_count = 0
             if 'latest_version' in node_data and node_data['latest_version']:
                 if 'dependencies' in node_data['latest_version']:
                     deps = node_data['latest_version']['dependencies']
                     if deps and isinstance(deps, list):
-                        dep_count = len(deps)
+                        for dep in deps:
+                            parsed = parse_dependency_string(dep)
+                            # Only count actual dependencies (not comments or pip commands)
+                            if not parsed['skip'] and not parsed['is_pip_command']:
+                                dep_count += 1
 
             # Check if node has web directory, routes, and pip-nonos
             has_web_dir = bool(node_data.get('_web_directories'))
