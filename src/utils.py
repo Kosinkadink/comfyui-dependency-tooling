@@ -88,6 +88,11 @@ def parse_dependency_string(dep_str):
         result['is_git_dep'] = True
         result['git_dep_type'] = '@ git+ style'
         result['base_name'] = cleaned.split(' @ ')[0].strip().lower()
+    # Type 3: Dependencies with @ (without git+ prefix, e.g., package @ https://...)
+    elif ' @ ' in cleaned:
+        result['is_git_dep'] = True
+        result['git_dep_type'] = '@ style'
+        result['base_name'] = cleaned.split(' @ ')[0].strip().lower()
     else:
         # Regular dependency - extract base package name
         dep_lower = cleaned.lower()
