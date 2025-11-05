@@ -5,7 +5,7 @@ Graph visualization functionality for ComfyUI dependency analysis.
 import re
 from datetime import datetime
 from pathlib import Path
-from .utils import make_filename_safe
+from .utils import parse_dependency_string, create_timestamped_filepath
 
 # Try to import plotly for graph visualization
 try:
@@ -13,6 +13,34 @@ try:
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
+
+
+def build_graph_title(base_title, query_desc):
+    """
+    Build a graph title with query modifiers like &top and &nodes.
+
+    Args:
+        base_title: Base title string
+        query_desc: Query description to parse for modifiers
+
+    Returns:
+        Complete title string with modifiers
+    """
+    title_parts = [base_title]
+
+    if '&top' in query_desc.lower():
+        top_match = re.search(r'&top\s+(-?\d+)', query_desc.lower())
+        if top_match:
+            n = int(top_match.group(1))
+            if n > 0:
+                title_parts.append(f'(Top {n} nodes)')
+            else:
+                title_parts.append(f'(Bottom {abs(n)} nodes)')
+
+    if '&nodes' in query_desc.lower():
+        title_parts.append('(Filtered nodes)')
+
+    return ' '.join(title_parts)
 
 
 def calculate_cumulative_dependencies(nodes_dict):
@@ -43,29 +71,15 @@ def calculate_cumulative_dependencies(nodes_dict):
                 deps = node_data['latest_version']['dependencies']
                 if deps and isinstance(deps, list):
                     for dep in deps:
-                        dep_str = str(dep).strip()
+                        parsed = parse_dependency_string(dep)
 
-                        # Skip comments and pip commands
-                        if dep_str.startswith('#') or dep_str.startswith('--'):
+                        # Skip comments, pip commands, and empty lines
+                        if parsed['skip'] or parsed['is_pip_command']:
                             continue
 
-                        # Strip inline comments
-                        if '#' in dep_str:
-                            dep_str = dep_str.split('#')[0].strip()
-
-                        if dep_str:
-                            # Extract base package name
-                            dep_lower = dep_str.lower()
-                            # Handle git dependencies differently
-                            if dep_str.startswith('git+'):
-                                base_name = dep_str  # Use full git URL as unique identifier
-                            elif ' @ git+' in dep_str:
-                                base_name = dep_str.split(' @ ')[0].strip().lower()
-                            else:
-                                base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
-
-                            node_unique_deps.add(base_name)
-                            unique_deps.add(base_name)
+                        if parsed['base_name']:
+                            node_unique_deps.add(parsed['base_name'])
+                            unique_deps.add(parsed['base_name'])
 
         node_counts.append(i)
         cumulative_deps.append(len(unique_deps))
@@ -137,22 +151,11 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph")
         ))
 
         # Build title based on query
-        title_parts = ['Cumulative Unique Dependencies by Node Rank']
-        if '&top' in query_desc.lower():
-            top_match = re.search(r'&top\s+(-?\d+)', query_desc.lower())
-            if top_match:
-                n = int(top_match.group(1))
-                if n > 0:
-                    title_parts.append(f'(Top {n} nodes)')
-                else:
-                    title_parts.append(f'(Bottom {abs(n)} nodes)')
-
-        if '&nodes' in query_desc.lower():
-            title_parts.append('(Filtered nodes)')
+        title = build_graph_title('Cumulative Unique Dependencies by Node Rank', query_desc)
 
         # Update layout
         fig.update_layout(
-            title=' '.join(title_parts),
+            title=title,
             xaxis_title='Number of Node Packs (sorted by popularity)',
             yaxis_title='Total Unique Dependencies',
             hovermode='closest',
@@ -168,17 +171,7 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph")
 
         # Save to file if requested
         if save_to_file:
-            # Create results directory if it doesn't exist
-            results_dir = Path('results')
-            results_dir.mkdir(exist_ok=True)
-
-            # Generate filename with timestamp
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            safe_query = make_filename_safe(query_desc)
-            filename = f"{timestamp}_{safe_query}.html"
-            filepath = results_dir / filename
-
-            # Save the graph
+            filepath = create_timestamped_filepath(query_desc, '.html')
             fig.write_html(str(filepath))
             print(f"\n[Graph saved to: {filepath}]")
 
@@ -334,22 +327,11 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             ))
 
         # Build title based on query
-        title_parts = ['Total Downloads by Node Rank']
-        if '&top' in query_desc.lower():
-            top_match = re.search(r'&top\s+(-?\d+)', query_desc.lower())
-            if top_match:
-                n = int(top_match.group(1))
-                if n > 0:
-                    title_parts.append(f'(Top {n} nodes)')
-                else:
-                    title_parts.append(f'(Bottom {abs(n)} nodes)')
-
-        if '&nodes' in query_desc.lower():
-            title_parts.append('(Filtered nodes)')
+        title = build_graph_title('Total Downloads by Node Rank', query_desc)
 
         # Update layout
         layout_params = {
-            'title': ' '.join(title_parts),
+            'title': title,
             'xaxis_title': 'Node Rank (sorted by popularity)',
             'yaxis_title': 'Total Downloads' + (' (log scale)' if log_scale else ''),
             'hovermode': 'closest',
@@ -423,17 +405,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
 
         # Save to file if requested
         if save_to_file:
-            # Create results directory if it doesn't exist
-            results_dir = Path('results')
-            results_dir.mkdir(exist_ok=True)
-
-            # Generate filename with timestamp
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            safe_query = make_filename_safe(query_desc)
-            filename = f"{timestamp}_{safe_query}.html"
-            filepath = results_dir / filename
-
-            # Save the graph
+            filepath = create_timestamped_filepath(query_desc, '.html')
             fig.write_html(str(filepath))
             print(f"\n[Graph saved to: {filepath}]")
 

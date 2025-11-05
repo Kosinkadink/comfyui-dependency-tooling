@@ -12,7 +12,8 @@ from collections import defaultdict
 
 # Import from src modules
 from src.graph import create_cumulative_graph, create_downloads_graph
-from src.utils import make_filename_safe
+from src.utils import (parse_dependency_string,
+                       create_timestamped_filepath, load_csv_data_to_nodes)
 
 
 import concurrent.futures
@@ -282,64 +283,41 @@ def compile_dependencies(nodes_dict):
                     node_git_deps = []
 
                     for dep in deps:
-                        dep_str = str(dep).strip()
+                        parsed = parse_dependency_string(dep)
 
-                        # Skip lines that start with # (full line comments)
-                        if dep_str.startswith('#'):
-                            commented_deps.append(dep_str)
-                            commented_dependencies.append(dep_str)
+                        # Handle comments
+                        if parsed['is_comment']:
+                            commented_deps.append(parsed['original_str'])
+                            commented_dependencies.append(parsed['original_str'])
                             continue
 
-                        # Check for pip commands (starting with --)
-                        if dep_str.startswith('--'):
-                            node_pip_commands.append(dep_str)
-                            pip_commands.append(dep_str)
-                            pip_command_count[dep_str] += 1
-                        else:
-                            # Strip inline comments (anything after #)
-                            if '#' in dep_str:
-                                dep_str = dep_str.split('#')[0].strip()
+                        # Handle pip commands
+                        if parsed['is_pip_command']:
+                            node_pip_commands.append(parsed['cleaned_str'])
+                            pip_commands.append(parsed['cleaned_str'])
+                            pip_command_count[parsed['cleaned_str']] += 1
+                            continue
 
-                            # Skip if the line becomes empty after stripping comments
-                            if not dep_str:
-                                continue
+                        # Skip empty lines
+                        if parsed['skip']:
+                            continue
 
-                            # Check for git-based dependencies
-                            is_git_dep = False
+                        # Handle git dependencies
+                        if parsed['is_git_dep']:
+                            node_git_deps.append(parsed['cleaned_str'])
+                            git_dependencies.append(parsed['cleaned_str'])
+                            git_dependency_count[parsed['git_dep_type']] += 1
 
-                            # Type 1: Dependencies starting with git+
-                            if dep_str.startswith('git+'):
-                                is_git_dep = True
-                                node_git_deps.append(dep_str)
-                                git_dependencies.append(dep_str)
-                                git_dependency_count['git+ prefix'] += 1
-                                # Extract just the URL part for base name
-                                base_name = dep_str
+                        # Add to active dependencies
+                        active_deps.append(parsed['cleaned_str'])
+                        all_dependencies_raw.append(parsed['cleaned_str'])
 
-                            # Type 2: Dependencies with @ git+ (e.g., package @ git+https://...)
-                            elif ' @ git+' in dep_str:
-                                is_git_dep = True
-                                node_git_deps.append(dep_str)
-                                git_dependencies.append(dep_str)
-                                git_dependency_count['@ git+ style'] += 1
-                                # Extract package name before @
-                                base_name = dep_str.split(' @ ')[0].strip().lower()
+                        # Count by base name
+                        base_name = parsed['base_name']
+                        base_dependency_count[base_name] += 1
 
-                            # Regular dependency
-                            else:
-                                # Extract base package name (before version specifiers)
-                                dep_lower = dep_str.lower()
-                                base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
-
-                            # Add to active dependencies
-                            active_deps.append(dep_str)
-                            all_dependencies_raw.append(dep_str)
-
-                            # Count by base name
-                            base_dependency_count[base_name] += 1
-
-                            # Track the full version spec
-                            dependency_versions[base_name].add(dep_str)
+                        # Track the full version spec
+                        dependency_versions[base_name].add(parsed['cleaned_str'])
 
                     if node_pip_commands:
                         nodes_with_pip_commands.append({
@@ -453,22 +431,14 @@ def analyze_wildcard_dependencies(nodes_dict, pattern):
             latest_version = node_data['latest_version']
             if 'dependencies' in latest_version and latest_version['dependencies']:
                 for dep in latest_version['dependencies']:
-                    dep_str = str(dep).strip()
-                    # Skip full line comments and pip commands
-                    if dep_str.startswith('#') or dep_str.startswith('--'):
+                    parsed = parse_dependency_string(dep)
+
+                    # Skip comments, pip commands, and empty lines
+                    if parsed['skip'] or parsed['is_pip_command']:
                         continue
 
-                    # Strip inline comments
-                    if '#' in dep_str:
-                        dep_str = dep_str.split('#')[0].strip()
-
-                    # Skip if empty after stripping
-                    if not dep_str:
-                        continue
-
-                    dep_lower = dep_str.lower()
-                    base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
-                    all_base_deps.add(base_name)
+                    if parsed['base_name']:
+                        all_base_deps.add(parsed['base_name'])
 
     # Find dependencies matching the pattern
     for base_dep in all_base_deps:
@@ -528,37 +498,25 @@ def analyze_specific_dependency(nodes_dict, dep_name):
 
             if 'dependencies' in latest_version and latest_version['dependencies']:
                 for dep in latest_version['dependencies']:
-                    dep_str = str(dep).strip()
+                    parsed = parse_dependency_string(dep)
 
-                    # Skip full line comments
-                    if dep_str.startswith('#'):
-                        # Check if this commented line mentions our dependency
-                        commented_content = dep_str[1:].strip()
-                        commented_lower = commented_content.lower()
-                        base_name = re.split(r'[<>=!~]', commented_lower)[0].strip()
-
-                        if base_name == dep_name_lower:
+                    # Check if commented line mentions our dependency
+                    if parsed['is_comment']:
+                        commented_content = parsed['original_str'][1:].strip()
+                        parsed_comment = parse_dependency_string(commented_content)
+                        if parsed_comment['base_name'] == dep_name_lower:
                             nodes_with_commented.append({
                                 'node_id': node_id,
                                 'node_name': node_data.get('name', 'N/A'),
-                                'commented_spec': dep_str
+                                'commented_spec': parsed['original_str']
                             })
-                        continue  # Skip commented lines for main analysis
-
-                    # Strip inline comments (anything after #)
-                    if '#' in dep_str:
-                        dep_str = dep_str.split('#')[0].strip()
-
-                    # Skip if the line becomes empty after stripping comments
-                    if not dep_str:
                         continue
 
-                    # Parse dependency string (could be just name or name with version)
-                    dep_lower = dep_str.lower()
+                    # Skip pip commands and empty lines
+                    if parsed['skip'] or parsed['is_pip_command']:
+                        continue
 
-                    # Extract base name (before any version specifier)
-                    base_name = re.split(r'[<>=!~]', dep_lower)[0].strip()
-
+                    base_name = parsed['base_name']
                     if base_name == dep_name_lower:
                         # Extract additional node information
                         latest_version_info = node_data.get('latest_version', {})
@@ -572,11 +530,12 @@ def analyze_specific_dependency(nodes_dict, dep_name):
                             except:
                                 latest_version_date = 'N/A'
 
+                        dep_spec = parsed['cleaned_str']
                         nodes_using.append({
                             'node_id': node_id,
                             'node_name': node_data.get('name', 'N/A'),
                             'repository': node_data.get('repository', 'N/A'),
-                            'dependency_spec': dep_str,
+                            'dependency_spec': dep_spec,
                             'stars': node_data.get('github_stars', 0),
                             'downloads': node_data.get('downloads', 0),
                             'rank': rank_map.get(node_id, 0),
@@ -584,9 +543,9 @@ def analyze_specific_dependency(nodes_dict, dep_name):
                         })
 
                         # Extract version if present
-                        version_match = re.search(r'[<>=!~]+(.+)', dep_str)
+                        version_match = re.search(r'[<>=!~]+(.+)', dep_spec)
                         if version_match:
-                            version_spec = dep_str[len(base_name):].strip()
+                            version_spec = dep_spec[len(base_name):].strip()
                             all_versions.append(version_spec)
                             version_count[version_spec] += 1
                         else:
@@ -608,15 +567,7 @@ def analyze_specific_dependency(nodes_dict, dep_name):
 
 def save_results_to_file(query, results_text):
     """Save search results to a timestamped file in the results directory."""
-    # Create results directory if it doesn't exist
-    results_dir = Path('results')
-    results_dir.mkdir(exist_ok=True)
-
-    # Generate filename with timestamp
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    safe_query = make_filename_safe(query)
-    filename = f"{timestamp}_{safe_query}.txt"
-    filepath = results_dir / filename
+    filepath = create_timestamped_filepath(query, '.txt')
 
     # Write results to file
     try:
@@ -840,38 +791,7 @@ def delete_requirements_cache(node_id):
     return False
 
 
-def parse_web_directory_csv(csv_file_path):
-    """
-    Parse a CSV file containing web directory information.
-    Only tracks unique .py files per repository.
-
-    Args:
-        csv_file_path: Path to the CSV file
-
-    Returns:
-        Dictionary mapping repository URLs to set of unique file paths
-    """
-    web_dirs = {}
-
-    try:
-        with open(csv_file_path, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            next(reader)  # Skip header
-
-            for row in reader:
-                if len(row) >= 4:
-                    repo_url = row[1]  # Column 2: Repository
-                    file_path = row[3]  # Column 4: File path
-
-                    # Only track .py files
-                    if file_path.endswith('.py'):
-                        if repo_url not in web_dirs:
-                            web_dirs[repo_url] = set()
-                        web_dirs[repo_url].add(file_path)
-    except Exception as e:
-        print(f"Warning: Could not parse CSV {csv_file_path}: {e}")
-
-    return web_dirs
+# parse_web_directory_csv has been replaced by parse_python_files_csv in src/utils.py
 
 
 def load_web_directory_data(nodes_dict):
@@ -885,81 +805,10 @@ def load_web_directory_data(nodes_dict):
     Returns:
         Number of nodes with web directory data
     """
-    web_dir_path = Path('web-directories')
-    if not web_dir_path.exists():
-        return 0
-
-    # Find all CSV files
-    csv_files = list(web_dir_path.glob('*.csv'))
-    if not csv_files:
-        return 0
-
-    # Parse all CSV files and collect web directory data
-    all_web_dirs = {}
-    for csv_file in csv_files:
-        csv_data = parse_web_directory_csv(csv_file)
-        all_web_dirs.update(csv_data)
-
-    # Map repository URLs to node IDs and add to nodes_dict
-    count = 0
-
-    for node_id, node_data in nodes_dict.items():
-        repo = node_data.get('repository', '')
-        if not repo or repo == 'N/A':
-            continue
-
-        # Normalize repository URL for matching
-        # Handle various URL formats
-        repo_normalized = repo.lower().strip('/')
-        repo_normalized = repo_normalized.replace('https://github.com/', '')
-        repo_normalized = repo_normalized.replace('http://github.com/', '')
-        repo_normalized = repo_normalized.replace('.git', '')
-
-        # Check if this repo has web directories
-        for csv_repo, file_paths in all_web_dirs.items():
-            csv_repo_normalized = csv_repo.lower().strip('/')
-            csv_repo_normalized = csv_repo_normalized.replace('github.com/', '')
-
-            if csv_repo_normalized == repo_normalized:
-                node_data['_web_directories'] = sorted(list(file_paths))
-                count += 1
-                break
-
-    return count
+    return load_csv_data_to_nodes(nodes_dict, 'web-directories', '_web_directories')
 
 
-def parse_routes_csv(csv_file_path):
-    """
-    Parse a CSV file containing routes information.
-    Only tracks unique .py files per repository.
-
-    Args:
-        csv_file_path: Path to the CSV file
-
-    Returns:
-        Dictionary mapping repository URLs to set of unique file paths
-    """
-    routes = {}
-
-    try:
-        with open(csv_file_path, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            next(reader)  # Skip header
-
-            for row in reader:
-                if len(row) >= 4:
-                    repo_url = row[1]  # Column 2: Repository
-                    file_path = row[3]  # Column 4: File path
-
-                    # Only track .py files
-                    if file_path.endswith('.py'):
-                        if repo_url not in routes:
-                            routes[repo_url] = set()
-                        routes[repo_url].add(file_path)
-    except Exception as e:
-        print(f"Warning: Could not parse CSV {csv_file_path}: {e}")
-
-    return routes
+# parse_routes_csv has been replaced by parse_python_files_csv in src/utils.py
 
 
 def load_routes_data(nodes_dict):
@@ -973,47 +822,7 @@ def load_routes_data(nodes_dict):
     Returns:
         Number of nodes with routes data
     """
-    routes_path = Path('route-any')
-    if not routes_path.exists():
-        return 0
-
-    # Find all CSV files
-    csv_files = list(routes_path.glob('*.csv'))
-    if not csv_files:
-        return 0
-
-    # Parse all CSV files and collect routes data
-    all_routes = {}
-    for csv_file in csv_files:
-        csv_data = parse_routes_csv(csv_file)
-        all_routes.update(csv_data)
-
-    # Map repository URLs to node IDs and add to nodes_dict
-    count = 0
-
-    for node_id, node_data in nodes_dict.items():
-        repo = node_data.get('repository', '')
-        if not repo or repo == 'N/A':
-            continue
-
-        # Normalize repository URL for matching
-        # Handle various URL formats
-        repo_normalized = repo.lower().strip('/')
-        repo_normalized = repo_normalized.replace('https://github.com/', '')
-        repo_normalized = repo_normalized.replace('http://github.com/', '')
-        repo_normalized = repo_normalized.replace('.git', '')
-
-        # Check if this repo has routes
-        for csv_repo, file_paths in all_routes.items():
-            csv_repo_normalized = csv_repo.lower().strip('/')
-            csv_repo_normalized = csv_repo_normalized.replace('github.com/', '')
-
-            if csv_repo_normalized == repo_normalized:
-                node_data['_routes'] = sorted(list(file_paths))
-                count += 1
-                break
-
-    return count
+    return load_csv_data_to_nodes(nodes_dict, 'route-any', '_routes')
 
 
 def load_all_cached_requirements(nodes_dict, original_deps_backup):
@@ -1289,26 +1098,20 @@ def display_node_dependencies(nodes_dict, node_id, original_deps_backup=None):
             git_deps = []
 
             for dep in deps:
-                dep_str = str(dep).strip()
+                parsed = parse_dependency_string(dep)
 
                 # Categorize dependencies
-                if dep_str.startswith('#'):
-                    commented_deps.append(dep_str)
-                elif dep_str.startswith('--'):
-                    pip_commands.append(dep_str)
-                elif dep_str.startswith('git+') or ' @ git+' in dep_str:
-                    # Strip inline comments
-                    if '#' in dep_str:
-                        dep_str = dep_str.split('#')[0].strip()
-                    if dep_str:
-                        git_deps.append(dep_str)
-                        active_deps.append(dep_str)
+                if parsed['is_comment']:
+                    commented_deps.append(parsed['original_str'])
+                elif parsed['is_pip_command']:
+                    pip_commands.append(parsed['cleaned_str'])
+                elif parsed['skip']:
+                    continue
+                elif parsed['is_git_dep']:
+                    git_deps.append(parsed['cleaned_str'])
+                    active_deps.append(parsed['cleaned_str'])
                 else:
-                    # Strip inline comments
-                    if '#' in dep_str:
-                        dep_str = dep_str.split('#')[0].strip()
-                    if dep_str:
-                        active_deps.append(dep_str)
+                    active_deps.append(parsed['cleaned_str'])
 
             # Display active dependencies
             if active_deps:
