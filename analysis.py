@@ -1102,8 +1102,17 @@ def display_node_dependencies(nodes_dict, node_id, original_deps_backup=None):
 
     # Display number of individual nodes if available
     node_ids = node_data.get('_node_ids', [])
-    if node_ids:
-        print(f"Individual Nodes: {len(node_ids)}")
+    has_pattern = node_data.get('_has_node_pattern', False)
+
+    # Show node count if we have node IDs or a pattern
+    if node_ids or has_pattern:
+        asterisk = '*' if has_pattern else ''
+        node_count = len(node_ids) if node_ids else 0
+        # If pattern exists but no explicit nodes, show just the asterisk
+        if has_pattern and node_count == 0:
+            print(f"Individual Nodes: * (pattern-based)")
+        else:
+            print(f"Individual Nodes: {node_count}{asterisk}")
 
     # Get latest version info
     latest_version_info = node_data.get('latest_version', {})
@@ -1969,13 +1978,21 @@ def interactive_mode(nodes_dict):
                     # Get individual nodes count
                     node_ids = node_data.get('_node_ids', [])
                     node_count = len(node_ids) if node_ids else 0
+                    has_node_pattern = node_data.get('_has_node_pattern', False)
 
                     # Format output
                     rank = full_rank_map.get(node_id, 'N/A')
                     asterisk = "*" if has_mismatch else ""
                     web_indicator = " | Web: Yes" if has_web_dir else ""
                     routes_indicator = " | Routes: Yes" if has_routes else ""
-                    nodes_indicator = f" | Nodes: {node_count}" if node_count > 0 else ""
+
+                    # Show nodes indicator if we have explicit nodes or a pattern
+                    if node_count > 0 or has_node_pattern:
+                        node_pattern_asterisk = "*" if has_node_pattern else ""
+                        nodes_indicator = f" | Nodes: {node_count}{node_pattern_asterisk}"
+                    else:
+                        nodes_indicator = ""
+
                     output_lines.append(f"\n{i}. {name} ({node_id})")
                     output_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{web_indicator}{routes_indicator}{nodes_indicator}")
                     output_lines.append(f"   Latest: {latest_date} | Version: {version}")
@@ -2046,12 +2063,20 @@ def interactive_mode(nodes_dict):
                         # Get individual nodes count
                         node_ids = node_data.get('_node_ids', [])
                         node_count = len(node_ids) if node_ids else 0
+                        has_node_pattern = node_data.get('_has_node_pattern', False)
 
                         rank = full_rank_map.get(node_id, 'N/A')
                         asterisk = "*" if has_mismatch else ""
                         web_indicator = " | Web: Yes" if has_web_dir else ""
                         routes_indicator = " | Routes: Yes" if has_routes else ""
-                        nodes_indicator = f" | Nodes: {node_count}" if node_count > 0 else ""
+
+                        # Show nodes indicator if we have explicit nodes or a pattern
+                        if node_count > 0 or has_node_pattern:
+                            node_pattern_asterisk = "*" if has_node_pattern else ""
+                            nodes_indicator = f" | Nodes: {node_count}{node_pattern_asterisk}"
+                        else:
+                            nodes_indicator = ""
+
                         save_lines.append(f"\n{i}. {name} ({node_id})")
                         save_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{web_indicator}{routes_indicator}{nodes_indicator}")
                         save_lines.append(f"   Latest: {latest_date} | Version: {version}")

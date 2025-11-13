@@ -321,6 +321,10 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             # Get individual nodes count
             node_ids = node_data.get('_node_ids', [])
             individual_node_count = len(node_ids) if node_ids else 0
+            has_node_pattern = node_data.get('_has_node_pattern', False)
+
+            # Format node count string with optional asterisk for pattern-based matching
+            node_count_str = f"{individual_node_count}*" if has_node_pattern else str(individual_node_count)
 
             # Track routes separately for visual indicator
             if has_routes:
@@ -332,7 +336,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 routes_dep_counts.append(dep_count)
                 routes_download_counts.append(download_count)
                 routes_web_dir_status.append('Yes' if has_web_dir else 'No')
-                routes_node_counts.append(individual_node_count)
+                routes_node_counts.append(node_count_str)
 
             # Track pip-nonos separately for visual indicator
             if has_pip_nonos:
@@ -345,7 +349,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 pip_nonos_download_counts.append(download_count)
                 pip_nonos_route_counts.append(route_count)
                 pip_nonos_web_dir_status.append('Yes' if has_web_dir else 'No')
-                pip_nonos_node_counts.append(individual_node_count)
+                pip_nonos_node_counts.append(node_count_str)
 
             # Append to appropriate lists
             if has_web_dir:
@@ -357,7 +361,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 web_dir_download_counts.append(download_count)
                 web_dir_route_counts.append(route_count)
                 web_dir_pip_nonos_counts.append(pip_nonos_count)
-                web_dir_node_counts.append(individual_node_count)
+                web_dir_node_counts.append(node_count_str)
             else:
                 no_web_dir_ranks.append(i)
                 no_web_dir_downloads.append(y_value)  # y_value is download_count or dep_count based on metric
@@ -367,7 +371,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 no_web_dir_download_counts.append(download_count)
                 no_web_dir_route_counts.append(route_count)
                 no_web_dir_pip_nonos_counts.append(pip_nonos_count)
-                no_web_dir_node_counts.append(individual_node_count)
+                no_web_dir_node_counts.append(node_count_str)
 
         # Calculate percentage milestones based on full dataset if provided
         # This ensures that when using &top filter, percentiles are relative to ALL downloads
@@ -393,6 +397,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         fig = go.Figure()
 
         # Build unified hover template - shows all information regardless of metric
+        # Note: Nodes field shows count + optional * for pattern-based matching
         hover_template = ('<b>Rank #%{x}</b><br>' +
                          'Name: %{text}<br>' +
                          'ID: %{customdata[0]}<br>' +
@@ -415,7 +420,8 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             zero_no_web_indices = [i for i in range(len(no_web_dir_dep_counts)) if no_web_dir_dep_counts[i] == 0]
         else:  # metric == 'nodes'
             # Check for zero node counts in nodes without web directories
-            zero_no_web_indices = [i for i in range(len(no_web_dir_node_counts)) if no_web_dir_node_counts[i] == 0]
+            # Note: node_counts are strings like "0" or "0*", so strip asterisk and compare
+            zero_no_web_indices = [i for i in range(len(no_web_dir_node_counts)) if no_web_dir_node_counts[i].rstrip('*') == '0']
 
         if zero_no_web_indices:
             zero_no_web_ranks = [no_web_dir_ranks[i] for i in zero_no_web_indices]
@@ -452,7 +458,8 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         elif metric == 'deps':
             zero_web_indices = [i for i in range(len(web_dir_dep_counts)) if web_dir_dep_counts[i] == 0]
         else:  # metric == 'nodes'
-            zero_web_indices = [i for i in range(len(web_dir_node_counts)) if web_dir_node_counts[i] == 0]
+            # Note: node_counts are strings like "0" or "0*", so strip asterisk and compare
+            zero_web_indices = [i for i in range(len(web_dir_node_counts)) if web_dir_node_counts[i].rstrip('*') == '0']
 
         if zero_web_indices:
             zero_web_ranks = [web_dir_ranks[i] for i in zero_web_indices]

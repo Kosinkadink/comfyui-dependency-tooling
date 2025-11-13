@@ -313,6 +313,13 @@ def load_extension_node_map(nodes_dict, json_file_path='manager-files/extension-
                 node_ids = matched_data[0]
                 if isinstance(node_ids, list):
                     node_data['_node_ids'] = node_ids
+
+                    # Check if there's a nodename_pattern (indicates dynamic node matching)
+                    if len(matched_data) > 1 and isinstance(matched_data[1], dict):
+                        if 'nodename_pattern' in matched_data[1]:
+                            node_data['_has_node_pattern'] = True
+                            node_data['_nodename_pattern'] = matched_data[1]['nodename_pattern']
+
                     count += 1
 
     return count
