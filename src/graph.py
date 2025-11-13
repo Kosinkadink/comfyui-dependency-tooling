@@ -392,142 +392,17 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         # Create the figure
         fig = go.Figure()
 
-        # Build hover template based on metric
-        if metric == 'deps':
-            no_web_hover = ('<b>Rank #%{x}</b><br>' +
-                           'Dependencies: %{y}<br>' +
-                           'Name: %{text}<br>' +
-                           'ID: %{customdata[0]}<br>' +
-                           'Downloads: %{customdata[1]:,.0f}<br>' +
-                           'Routes: %{customdata[2]}<br>' +
-                           'Pip Calls: %{customdata[3]}<br>' +
-                           'Nodes: %{customdata[4]}<br>' +
-                           'Web Directory: No<br>' +
-                           '<extra></extra>')
-        elif metric == 'nodes':
-            no_web_hover = ('<b>Rank #%{x}</b><br>' +
-                           'Nodes: %{y}<br>' +
-                           'Name: %{text}<br>' +
-                           'ID: %{customdata[0]}<br>' +
-                           'Downloads: %{customdata[1]:,.0f}<br>' +
-                           'Routes: %{customdata[2]}<br>' +
-                           'Pip Calls: %{customdata[3]}<br>' +
-                           'Dependencies: %{customdata[4]}<br>' +
-                           'Web Directory: No<br>' +
-                           '<extra></extra>')
-        else:
-            no_web_hover = ('<b>Rank #%{x}</b><br>' +
-                           'Downloads: %{y:,.0f}<br>' +
-                           'Name: %{text}<br>' +
-                           'ID: %{customdata[0]}<br>' +
-                           'Dependencies: %{customdata[1]}<br>' +
-                           'Routes: %{customdata[2]}<br>' +
-                           'Pip Calls: %{customdata[3]}<br>' +
-                           'Nodes: %{customdata[4]}<br>' +
-                           'Web Directory: No<br>' +
-                           '<extra></extra>')
-
-        # Build hover template for web directory nodes
-        if metric == 'deps':
-            web_hover = ('<b>Rank #%{x}</b><br>' +
-                        'Dependencies: %{y}<br>' +
-                        'Name: %{text}<br>' +
-                        'ID: %{customdata[0]}<br>' +
-                        'Downloads: %{customdata[1]:,.0f}<br>' +
-                        'Routes: %{customdata[2]}<br>' +
-                        'Pip Calls: %{customdata[3]}<br>' +
-                        'Nodes: %{customdata[4]}<br>' +
-                        'Web Directory: Yes<br>' +
-                        '<extra></extra>')
-        elif metric == 'nodes':
-            web_hover = ('<b>Rank #%{x}</b><br>' +
-                        'Nodes: %{y}<br>' +
-                        'Name: %{text}<br>' +
-                        'ID: %{customdata[0]}<br>' +
-                        'Downloads: %{customdata[1]:,.0f}<br>' +
-                        'Routes: %{customdata[2]}<br>' +
-                        'Pip Calls: %{customdata[3]}<br>' +
-                        'Dependencies: %{customdata[4]}<br>' +
-                        'Web Directory: Yes<br>' +
-                        '<extra></extra>')
-        else:
-            web_hover = ('<b>Rank #%{x}</b><br>' +
-                        'Downloads: %{y:,.0f}<br>' +
-                        'Name: %{text}<br>' +
-                        'ID: %{customdata[0]}<br>' +
-                        'Dependencies: %{customdata[1]}<br>' +
-                        'Routes: %{customdata[2]}<br>' +
-                        'Pip Calls: %{customdata[3]}<br>' +
-                        'Nodes: %{customdata[4]}<br>' +
-                        'Web Directory: Yes<br>' +
-                        '<extra></extra>')
-
-        # Build hover template for routes
-        if metric == 'deps':
-            routes_hover = ('<b>Rank #%{x}</b><br>' +
-                           'Dependencies: %{y}<br>' +
-                           'Name: %{text}<br>' +
-                           'ID: %{customdata[0]}<br>' +
-                           'Downloads: %{customdata[1]:,.0f}<br>' +
-                           'Routes: %{customdata[2]}<br>' +
-                           'Nodes: %{customdata[3]}<br>' +
-                           'Web Directory: %{customdata[4]}<br>' +
-                           '<extra></extra>')
-        elif metric == 'nodes':
-            routes_hover = ('<b>Rank #%{x}</b><br>' +
-                           'Nodes: %{y}<br>' +
-                           'Name: %{text}<br>' +
-                           'ID: %{customdata[0]}<br>' +
-                           'Downloads: %{customdata[1]:,.0f}<br>' +
-                           'Routes: %{customdata[2]}<br>' +
-                           'Dependencies: %{customdata[3]}<br>' +
-                           'Web Directory: %{customdata[4]}<br>' +
-                           '<extra></extra>')
-        else:
-            routes_hover = ('<b>Rank #%{x}</b><br>' +
-                           'Downloads: %{y:,.0f}<br>' +
-                           'Name: %{text}<br>' +
-                           'ID: %{customdata[0]}<br>' +
-                           'Dependencies: %{customdata[1]}<br>' +
-                           'Routes: %{customdata[2]}<br>' +
-                           'Nodes: %{customdata[3]}<br>' +
-                           'Web Directory: %{customdata[4]}<br>' +
-                           '<extra></extra>')
-
-        # Build hover template for pip-nonos
-        if metric == 'deps':
-            pip_nonos_hover = ('<b>Rank #%{x}</b><br>' +
-                              'Dependencies: %{y}<br>' +
-                              'Name: %{text}<br>' +
-                              'ID: %{customdata[0]}<br>' +
-                              'Downloads: %{customdata[1]:,.0f}<br>' +
-                              'Routes: %{customdata[2]}<br>' +
-                              'Pip Calls: %{customdata[3]}<br>' +
-                              'Nodes: %{customdata[4]}<br>' +
-                              'Web Directory: %{customdata[5]}<br>' +
-                              '<extra></extra>')
-        elif metric == 'nodes':
-            pip_nonos_hover = ('<b>Rank #%{x}</b><br>' +
-                              'Nodes: %{y}<br>' +
-                              'Name: %{text}<br>' +
-                              'ID: %{customdata[0]}<br>' +
-                              'Downloads: %{customdata[1]:,.0f}<br>' +
-                              'Routes: %{customdata[2]}<br>' +
-                              'Pip Calls: %{customdata[3]}<br>' +
-                              'Dependencies: %{customdata[4]}<br>' +
-                              'Web Directory: %{customdata[5]}<br>' +
-                              '<extra></extra>')
-        else:
-            pip_nonos_hover = ('<b>Rank #%{x}</b><br>' +
-                              'Downloads: %{y:,.0f}<br>' +
-                              'Name: %{text}<br>' +
-                              'ID: %{customdata[0]}<br>' +
-                              'Dependencies: %{customdata[1]}<br>' +
-                              'Routes: %{customdata[2]}<br>' +
-                              'Pip Calls: %{customdata[3]}<br>' +
-                              'Nodes: %{customdata[4]}<br>' +
-                              'Web Directory: %{customdata[5]}<br>' +
-                              '<extra></extra>')
+        # Build unified hover template - shows all information regardless of metric
+        hover_template = ('<b>Rank #%{x}</b><br>' +
+                         'Name: %{text}<br>' +
+                         'ID: %{customdata[0]}<br>' +
+                         'Downloads: %{customdata[1]:,.0f}<br>' +
+                         'Dependencies: %{customdata[2]}<br>' +
+                         'Nodes: %{customdata[3]}<br>' +
+                         'Routes: %{customdata[4]}<br>' +
+                         'Pip Calls: %{customdata[5]}<br>' +
+                         'Web Directory: %{customdata[6]}<br>' +
+                         '<extra></extra>')
 
         # Add visual indicators for zero-value bars (small circles at bottom)
         # Only add indicators for zeros in the metric being displayed
@@ -563,11 +438,10 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     color='#3498db',  # Blue (matching no web dir color)
                     line=dict(width=1, color='#2c3e50')
                 ),
-                customdata=list(zip(zero_no_web_ids,
-                                   zero_no_web_download_counts if metric == 'deps' else (zero_no_web_download_counts if metric == 'nodes' else zero_no_web_dep_counts),
-                                   zero_no_web_route_counts, zero_no_web_pip_nonos_counts,
-                                   zero_no_web_node_counts if metric != 'nodes' else zero_no_web_dep_counts)),
-                hovertemplate=no_web_hover,
+                customdata=list(zip(zero_no_web_ids, zero_no_web_download_counts, zero_no_web_dep_counts,
+                                   zero_no_web_node_counts, zero_no_web_route_counts, zero_no_web_pip_nonos_counts,
+                                   ['No'] * len(zero_no_web_ids))),
+                hovertemplate=hover_template,
                 text=zero_no_web_names,
                 showlegend=False  # Don't clutter legend
             ))
@@ -601,11 +475,10 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     color='#2ecc71',  # Green (matching web dir color)
                     line=dict(width=1, color='#27ae60')
                 ),
-                customdata=list(zip(zero_web_ids,
-                                   zero_web_download_counts if metric == 'deps' else (zero_web_download_counts if metric == 'nodes' else zero_web_dep_counts),
-                                   zero_web_route_counts, zero_web_pip_nonos_counts,
-                                   zero_web_node_counts if metric != 'nodes' else zero_web_dep_counts)),
-                hovertemplate=web_hover,
+                customdata=list(zip(zero_web_ids, zero_web_download_counts, zero_web_dep_counts,
+                                   zero_web_node_counts, zero_web_route_counts, zero_web_pip_nonos_counts,
+                                   ['Yes'] * len(zero_web_ids))),
+                hovertemplate=hover_template,
                 text=zero_web_names,
                 showlegend=False  # Don't clutter legend
             ))
@@ -623,11 +496,10 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 ),
                 text=no_web_dir_names,
                 textposition='auto',
-                customdata=list(zip(no_web_dir_ids,
-                                   no_web_dir_download_counts if metric == 'deps' else (no_web_dir_download_counts if metric == 'nodes' else no_web_dir_dep_counts),
-                                   no_web_dir_route_counts, no_web_dir_pip_nonos_counts,
-                                   no_web_dir_node_counts if metric != 'nodes' else no_web_dir_dep_counts)),
-                hovertemplate=no_web_hover
+                customdata=list(zip(no_web_dir_ids, no_web_dir_download_counts, no_web_dir_dep_counts,
+                                   no_web_dir_node_counts, no_web_dir_route_counts, no_web_dir_pip_nonos_counts,
+                                   ['No'] * len(no_web_dir_ids))),
+                hovertemplate=hover_template
             ))
 
         # Add trace for nodes with web directories (green)
@@ -642,11 +514,10 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 ),
                 text=web_dir_names,
                 textposition='auto',
-                customdata=list(zip(web_dir_ids,
-                                   web_dir_download_counts if metric == 'deps' else (web_dir_download_counts if metric == 'nodes' else web_dir_dep_counts),
-                                   web_dir_route_counts, web_dir_pip_nonos_counts,
-                                   web_dir_node_counts if metric != 'nodes' else web_dir_dep_counts)),
-                hovertemplate=web_hover
+                customdata=list(zip(web_dir_ids, web_dir_download_counts, web_dir_dep_counts,
+                                   web_dir_node_counts, web_dir_route_counts, web_dir_pip_nonos_counts,
+                                   ['Yes'] * len(web_dir_ids))),
+                hovertemplate=hover_template
             ))
 
         # Add visual indicator for nodes with routes (star markers on top of bars)
@@ -663,12 +534,10 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     color='#e74c3c',  # Red
                     line=dict(width=1, color='#c0392b')
                 ),
-                customdata=list(zip(routes_ids,
-                                   routes_download_counts if metric == 'deps' else (routes_download_counts if metric == 'nodes' else routes_dep_counts),
-                                   routes_counts,
-                                   routes_node_counts if metric != 'nodes' else routes_dep_counts,
+                customdata=list(zip(routes_ids, routes_download_counts, routes_dep_counts,
+                                   routes_node_counts, routes_counts, [0] * len(routes_ids),
                                    routes_web_dir_status)),
-                hovertemplate=routes_hover,
+                hovertemplate=hover_template,
                 text=routes_names
             ))
 
@@ -686,12 +555,10 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     color='#f39c12',  # Orange
                     line=dict(width=1, color='#d68910')
                 ),
-                customdata=list(zip(pip_nonos_ids,
-                                   pip_nonos_download_counts if metric == 'deps' else (pip_nonos_download_counts if metric == 'nodes' else pip_nonos_dep_counts),
-                                   pip_nonos_route_counts, pip_nonos_counts,
-                                   pip_nonos_node_counts if metric != 'nodes' else pip_nonos_dep_counts,
+                customdata=list(zip(pip_nonos_ids, pip_nonos_download_counts, pip_nonos_dep_counts,
+                                   pip_nonos_node_counts, pip_nonos_route_counts, pip_nonos_counts,
                                    pip_nonos_web_dir_status)),
-                hovertemplate=pip_nonos_hover,
+                hovertemplate=hover_template,
                 text=pip_nonos_names
             ))
 
