@@ -248,6 +248,7 @@ def load_csv_data_to_nodes(nodes_dict, csv_directory, node_key):
 def load_extension_node_map(nodes_dict, json_file_path='manager-files/extension-node-map.json'):
     """
     Load extension-node-map.json and map node IDs to node packs.
+    Uses fuzzy matching to handle forks (matches by repo name if exact URL match fails).
 
     Args:
         nodes_dict: Dictionary of nodes to update (modified in-place)
@@ -269,6 +270,17 @@ def load_extension_node_map(nodes_dict, json_file_path='manager-files/extension-
 
     count = 0
 
+    # Build a lookup for fuzzy matching by repository name
+    repo_name_map = {}
+    for map_repo, map_data in extension_map.items():
+        map_repo_normalized = normalize_repository_url(map_repo)
+        # Extract just the repo name (last part after /)
+        if '/' in map_repo_normalized:
+            repo_name = map_repo_normalized.split('/')[-1]
+            if repo_name not in repo_name_map:
+                repo_name_map[repo_name] = []
+            repo_name_map[repo_name].append((map_repo, map_data))
+
     # Map repository URLs to node IDs
     for node_id, node_data in nodes_dict.items():
         repo = node_data.get('repository', '')
@@ -278,17 +290,29 @@ def load_extension_node_map(nodes_dict, json_file_path='manager-files/extension-
         # Normalize repository URL for matching
         repo_normalized = normalize_repository_url(repo)
 
-        # Check if this repo has node mapping data
+        matched_data = None
+
+        # Try exact match first
         for map_repo, map_data in extension_map.items():
             map_repo_normalized = normalize_repository_url(map_repo)
 
             if map_repo_normalized == repo_normalized:
-                # Extract the node IDs list (first element of the value)
-                if isinstance(map_data, list) and len(map_data) > 0:
-                    node_ids = map_data[0]
-                    if isinstance(node_ids, list):
-                        node_data['_node_ids'] = node_ids
-                        count += 1
+                matched_data = map_data
                 break
+
+        # If no exact match, try fuzzy match by repo name (handles forks)
+        if not matched_data and '/' in repo_normalized:
+            repo_name = repo_normalized.split('/')[-1]
+            if repo_name in repo_name_map:
+                # Use the first matching repo with this name
+                matched_data = repo_name_map[repo_name][0][1]
+
+        # Extract and store node IDs if we found a match
+        if matched_data:
+            if isinstance(matched_data, list) and len(matched_data) > 0:
+                node_ids = matched_data[0]
+                if isinstance(node_ids, list):
+                    node_data['_node_ids'] = node_ids
+                    count += 1
 
     return count
