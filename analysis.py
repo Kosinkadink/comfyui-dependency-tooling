@@ -11,9 +11,10 @@ from pathlib import Path
 from collections import defaultdict
 
 # Import from src modules
-from src.graph import create_cumulative_graph, create_downloads_graph, create_deps_graph
+from src.graph import create_cumulative_graph, create_downloads_graph, create_deps_graph, create_nodes_graph
 from src.utils import (parse_dependency_string,
-                       create_timestamped_filepath, load_csv_data_to_nodes)
+                       create_timestamped_filepath, load_csv_data_to_nodes,
+                       load_extension_node_map)
 
 
 import concurrent.futures
@@ -201,6 +202,44 @@ def save_nodes_json(registry_data, filepath='manager-files/nodes.json'):
         return True
     except Exception as e:
         print(f"Error saving nodes.json: {e}")
+        return False
+
+
+def fetch_and_save_extension_node_map(filepath='manager-files/extension-node-map.json'):
+    """
+    Fetch extension-node-map.json from ComfyUI-Manager repository and save it.
+
+    Args:
+        filepath: Path to save the file to
+
+    Returns:
+        True if successful, False otherwise
+    """
+    url = "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/extension-node-map.json"
+
+    try:
+        print(f"Fetching extension-node-map.json from {url}...")
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        # Parse JSON to validate it
+        node_map_data = response.json()
+
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+        # Save with indent=4 for readability
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(node_map_data, f, indent=4)
+
+        print(f"Successfully updated {filepath}")
+        print(f"Total extensions mapped: {len(node_map_data)}")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching extension-node-map.json: {e}")
+        return False
+    except Exception as e:
+        print(f"Error saving extension-node-map.json: {e}")
         return False
 
 
@@ -839,6 +878,20 @@ def load_pip_nonos_data(nodes_dict):
     return load_csv_data_to_nodes(nodes_dict, 'pip-nonos', '_pip_nonos')
 
 
+def load_node_ids_data(nodes_dict):
+    """
+    Load node IDs from extension-node-map.json in manager-files folder.
+    Maps repository URLs to node IDs and adds node ID list to nodes_dict.
+
+    Args:
+        nodes_dict: Dictionary of all nodes (modified in place)
+
+    Returns:
+        Number of nodes with node ID data
+    """
+    return load_extension_node_map(nodes_dict)
+
+
 def load_all_cached_requirements(nodes_dict, original_deps_backup):
     """
     Load all cached requirements.txt files on startup.
@@ -1047,6 +1100,11 @@ def display_node_dependencies(nodes_dict, node_id, original_deps_backup=None):
     print(f"Repository: {repo}")
     print(f"Description: {description}")
 
+    # Display number of individual nodes if available
+    node_ids = node_data.get('_node_ids', [])
+    if node_ids:
+        print(f"Individual Nodes: {len(node_ids)}")
+
     # Get latest version info
     latest_version_info = node_data.get('latest_version', {})
     if latest_version_info:
@@ -1232,6 +1290,7 @@ def print_help():
     print("  /graph downloads indicators - Show with percentage milestones (50%, 75%, 90%, 99%)")
     print("  /graph downloads log indicators - Log scale with percentage milestones")
     print("  /graph deps - Create dependency count visualization")
+    print("  /graph nodes - Create individual node count visualization")
     print("  /summary - Show overall dependency analysis summary")
     print("  /help  - Show this help message")
     print("  /quit  - Exit interactive mode")
@@ -1318,6 +1377,11 @@ def interactive_mode(nodes_dict):
     if pip_nonos_count > 0:
         print(f"[Loaded pip direct call data for {pip_nonos_count} nodes]")
 
+    # Load node IDs from extension-node-map.json
+    node_ids_count = load_node_ids_data(nodes_dict)
+    if node_ids_count > 0:
+        print(f"[Loaded node IDs for {node_ids_count} nodes]")
+
     # Pre-compile all dependencies for quick lookup
     dep_analysis = compile_dependencies(nodes_dict)
     # Use unique base dependencies instead of raw unique dependencies
@@ -1340,8 +1404,17 @@ def interactive_mode(nodes_dict):
 
                     # Save using the shared function
                     if save_nodes_json(registry_data):
+                        # Also fetch and save extension-node-map.json
+                        fetch_and_save_extension_node_map()
+
                         # Reload the nodes dictionary with the updated data
                         nodes_dict = load_nodes_to_dict()
+
+                        # Reload all data sources
+                        web_dir_count = load_web_directory_data(nodes_dict)
+                        routes_count = load_routes_data(nodes_dict)
+                        pip_nonos_count = load_pip_nonos_data(nodes_dict)
+                        node_ids_count = load_node_ids_data(nodes_dict)
 
                         # Re-compile dependencies for the new data
                         dep_analysis = compile_dependencies(nodes_dict)
@@ -1361,13 +1434,14 @@ def interactive_mode(nodes_dict):
                 # Parse modifiers for /graph command
                 query_words = query.lower().split()
 
-                # Require a graph type (cumulative, downloads, or deps)
+                # Require a graph type (cumulative, downloads, deps, or nodes)
                 if query.lower().strip() == '/graph':
-                    print("Error: /graph requires a type (cumulative, downloads, or deps)")
+                    print("Error: /graph requires a type (cumulative, downloads, deps, or nodes)")
                     print("Usage:")
                     print("  /graph cumulative - Cumulative dependencies graph")
                     print("  /graph downloads - Downloads graph")
                     print("  /graph deps - Dependency count graph")
+                    print("  /graph nodes - Individual node count graph")
                     print("See /help for more options")
                     continue
 
@@ -1393,12 +1467,15 @@ def interactive_mode(nodes_dict):
                         show_indicators = True
                 elif 'deps' in query_words:
                     graph_type = 'deps'
+                elif 'nodes' in query_words:
+                    graph_type = 'nodes'
                 else:
-                    print("Error: Unknown graph type. Use 'cumulative', 'downloads', or 'deps'")
+                    print("Error: Unknown graph type. Use 'cumulative', 'downloads', 'deps', or 'nodes'")
                     print("Usage:")
                     print("  /graph cumulative - Cumulative dependencies graph")
                     print("  /graph downloads - Downloads graph")
                     print("  /graph deps - Dependency count graph")
+                    print("  /graph nodes - Individual node count graph")
                     continue
 
                 # Parse &nodes modifier first to filter by specific nodes
@@ -1433,6 +1510,8 @@ def interactive_mode(nodes_dict):
                     create_downloads_graph(working_nodes, save_to_file=save_results, query_desc=original_query, log_scale=use_log_scale, show_indicators=show_indicators, full_nodes_for_percentiles=full_nodes_for_percentiles)
                 elif graph_type == 'deps':
                     create_deps_graph(working_nodes, save_to_file=save_results, query_desc=original_query, full_nodes_for_percentiles=full_nodes_for_percentiles)
+                elif graph_type == 'nodes':
+                    create_nodes_graph(working_nodes, save_to_file=save_results, query_desc=original_query, full_nodes_for_percentiles=full_nodes_for_percentiles)
                 else:
                     create_cumulative_graph(working_nodes, save_to_file=save_results, query_desc=original_query)
 
@@ -1887,13 +1966,18 @@ def interactive_mode(nodes_dict):
                     has_web_dir = bool(node_data.get('_web_directories'))
                     has_routes = bool(node_data.get('_routes'))
 
+                    # Get individual nodes count
+                    node_ids = node_data.get('_node_ids', [])
+                    node_count = len(node_ids) if node_ids else 0
+
                     # Format output
                     rank = full_rank_map.get(node_id, 'N/A')
                     asterisk = "*" if has_mismatch else ""
                     web_indicator = " | Web: Yes" if has_web_dir else ""
                     routes_indicator = " | Routes: Yes" if has_routes else ""
+                    nodes_indicator = f" | Nodes: {node_count}" if node_count > 0 else ""
                     output_lines.append(f"\n{i}. {name} ({node_id})")
-                    output_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{web_indicator}{routes_indicator}")
+                    output_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{web_indicator}{routes_indicator}{nodes_indicator}")
                     output_lines.append(f"   Latest: {latest_date} | Version: {version}")
                     if len(description) > 100:
                         output_lines.append(f"   Description: {description[:100]}...")
@@ -1959,12 +2043,17 @@ def interactive_mode(nodes_dict):
                         has_web_dir = bool(node_data.get('_web_directories'))
                         has_routes = bool(node_data.get('_routes'))
 
+                        # Get individual nodes count
+                        node_ids = node_data.get('_node_ids', [])
+                        node_count = len(node_ids) if node_ids else 0
+
                         rank = full_rank_map.get(node_id, 'N/A')
                         asterisk = "*" if has_mismatch else ""
                         web_indicator = " | Web: Yes" if has_web_dir else ""
                         routes_indicator = " | Routes: Yes" if has_routes else ""
+                        nodes_indicator = f" | Nodes: {node_count}" if node_count > 0 else ""
                         save_lines.append(f"\n{i}. {name} ({node_id})")
-                        save_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{web_indicator}{routes_indicator}")
+                        save_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{web_indicator}{routes_indicator}{nodes_indicator}")
                         save_lines.append(f"   Latest: {latest_date} | Version: {version}")
                         save_lines.append(f"   Description: {description}")
                         save_lines.append(f"   Repository: {repo}")
@@ -2346,6 +2435,10 @@ def main():
             # Save using the shared function
             if not save_nodes_json(registry_data):
                 print("Failed to save nodes data")
+                return
+
+            # Also fetch and save extension-node-map.json
+            fetch_and_save_extension_node_map()
             return
         except Exception as e:
             print(f"Error updating nodes.json: {e}")

@@ -4,6 +4,7 @@ Shared utility functions for ComfyUI dependency analysis.
 
 import re
 import csv
+import json
 from pathlib import Path
 from datetime import datetime
 
@@ -239,6 +240,55 @@ def load_csv_data_to_nodes(nodes_dict, csv_directory, node_key):
             if csv_repo_normalized == repo_normalized:
                 node_data[node_key] = sorted(list(file_paths))
                 count += 1
+                break
+
+    return count
+
+
+def load_extension_node_map(nodes_dict, json_file_path='manager-files/extension-node-map.json'):
+    """
+    Load extension-node-map.json and map node IDs to node packs.
+
+    Args:
+        nodes_dict: Dictionary of nodes to update (modified in-place)
+        json_file_path: Path to the extension-node-map.json file
+
+    Returns:
+        Number of nodes updated with node ID data
+    """
+    json_path = Path(json_file_path)
+    if not json_path.exists():
+        return 0
+
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            extension_map = json.load(f)
+    except Exception as e:
+        print(f"Warning: Could not load {json_file_path}: {e}")
+        return 0
+
+    count = 0
+
+    # Map repository URLs to node IDs
+    for node_id, node_data in nodes_dict.items():
+        repo = node_data.get('repository', '')
+        if not repo or repo == 'N/A':
+            continue
+
+        # Normalize repository URL for matching
+        repo_normalized = normalize_repository_url(repo)
+
+        # Check if this repo has node mapping data
+        for map_repo, map_data in extension_map.items():
+            map_repo_normalized = normalize_repository_url(map_repo)
+
+            if map_repo_normalized == repo_normalized:
+                # Extract the node IDs list (first element of the value)
+                if isinstance(map_data, list) and len(map_data) > 0:
+                    node_ids = map_data[0]
+                    if isinstance(node_ids, list):
+                        node_data['_node_ids'] = node_ids
+                        count += 1
                 break
 
     return count
