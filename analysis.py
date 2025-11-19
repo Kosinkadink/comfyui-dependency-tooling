@@ -544,7 +544,6 @@ def load_missing_nodes_data(nodes_dict):
     """
     import csv
     import os
-    import ast
     from pathlib import Path
 
     missing_nodes_path = Path('missing-nodes')
@@ -572,24 +571,12 @@ def load_missing_nodes_data(nodes_dict):
                     if not content:
                         continue
 
-                    # Parse node IDs from this entry
-                    entry_node_ids = []
-                    try:
-                        # Try to evaluate it as a Python literal
-                        node_list = ast.literal_eval(content)
-
-                        if isinstance(node_list, list):
-                            entry_node_ids = node_list
-                        elif isinstance(node_list, str):
-                            entry_node_ids = [node_list]
-                    except (ValueError, SyntaxError):
-                        # If that fails, try simple string parsing
-                        cleaned = content.strip('[]"\' ')
-                        if cleaned:
-                            entry_node_ids = [cleaned]
-
-                    if not entry_node_ids:
+                    # Parse node IDs from this entry (comma-separated format)
+                    cleaned = content.strip('[]"\' ')
+                    if not cleaned:
                         continue
+
+                    entry_node_ids = [node_id.strip() for node_id in cleaned.split(',')]
 
                     # Map these node IDs to packs
                     entry_packs = set()
