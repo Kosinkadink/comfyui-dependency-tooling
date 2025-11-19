@@ -64,6 +64,8 @@ The codebase follows a **functional programming** style with no classes. All cod
   - `load_csv_data_to_nodes()` - Loads CSV data into node dictionaries
   - `load_extension_node_map()` - Maps node IDs to packages with fuzzy matching
   - `normalize_repository_url()` - Normalizes GitHub URLs for comparison
+  - `load_missing_nodes_csvs()` - Extracts node IDs from missing-nodes CSV files
+  - `map_node_ids_to_packs()` - Maps node IDs to packs using direct and pattern matching
 
 - **src/graph.py** - Visualization functions using plotly:
   - `create_cumulative_graph()` - Shows dependency accumulation by rank
@@ -78,6 +80,7 @@ The codebase follows a **functional programming** style with no classes. All cod
    - Loads `manager-files/extension-node-map.json` for node ID mappings
    - Loads cached requirements.txt from `updated_reqs/` directory
    - Optionally loads CSV data (web directories, routes, pip usage)
+   - Loads missing nodes from `missing-nodes/*.csv` files and maps to packs
 
 2. **Rank Storage** (`store_node_ranks()`):
    - Calculates overall download ranks for all nodes (1-based)
@@ -145,6 +148,7 @@ Modifiers filter or modify command behavior. They are parsed using regex pattern
 - `&dupes` - (For `/list`) Show only dependencies with version conflicts
 - `&nodes file:path.txt` - Filter to specific node IDs from file or comma-separated list
 - `&stat <name>` - Filter to nodes with specific stats (e.g., `&stat web-dirs`, `&stat routes`)
+- `&hide-markers <name,name>` - Hide specific stat markers in graphs (e.g., `&hide-markers missing-nodes,routes`)
 
 ### Registry API Integration
 
@@ -194,11 +198,39 @@ Example: `https://github.com/user/repo` and `https://github.com/fork/repo` both 
 
 Nodes are ranked by downloads (descending). The rank map is calculated once via `calculate_node_ranks()` and reused across all commands.
 
+### Missing Nodes Mapping
+
+The tool can load and map "missing" node IDs from CSV files in the `missing-nodes/` directory:
+
+1. **Input CSV Format**: Files must have `content` and `metadata` columns
+2. **Content Parsing**: The `content` column contains quoted lists of node IDs (e.g., `"['NodeA', 'NodeB']"`)
+3. **Node Mapping** (`map_node_ids_to_packs()`):
+   - First tries direct lookup in `_node_ids` lists
+   - Falls back to regex pattern matching using `_nodename_pattern`
+   - Returns dictionary: `{node_id: pack_id}` (or `None` if unmatched)
+4. **Entry-Level Tracking**:
+   - Processes each original CSV entry (row) independently
+   - Determines which node packs are referenced by that entry
+   - Each entry counts only once per pack (even if multiple nodes from same pack)
+   - Tracks entry identifiers (`entry_0.py`, `entry_1.py`, etc.) - `.py` extension required for CSV parser compatibility
+5. **Node-Stats CSV Generation**:
+   - Creates `node-stats/missing-nodes/missing-nodes.csv` in compatible format
+   - CSV format: `pack_id, repository, entry_count, entry_identifier`
+   - Each row represents one original CSV entry that referenced a pack
+   - The count of rows per pack = number of original entries referencing that pack
+   - Deletes old CSV files in `node-stats/missing-nodes/` before creating new one
+   - Original source files in `missing-nodes/` are preserved
+6. **Loading**: Automatically loaded on startup via `load_missing_nodes_data()`
+
+This allows tracking of which node packs are referenced by missing node data and integrates with the dynamic stats loading system.
+
 ## File Structure Notes
 
 - **manager-files/**: JSON data from ComfyUI registry
 - **results/**: Timestamped output files when using `&save`
 - **updated_reqs/**: Cached requirements.txt files organized by node ID
+- **missing-nodes/**: CSV files containing node IDs to map to packs
+- **node-stats/**: CSV files with node statistics (auto-discovered)
 - **src/**: Utility and graphing modules
 - **test_*.py**: Test scripts for specific functionality
 

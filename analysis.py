@@ -15,7 +15,8 @@ from src.graph import create_cumulative_graph, create_downloads_graph, create_de
 from src.utils import (parse_dependency_string,
                        create_timestamped_filepath, load_csv_data_to_nodes,
                        load_extension_node_map, load_all_node_stats,
-                       get_node_stat_count, get_all_stat_names)
+                       get_node_stat_count, get_all_stat_names,
+                       load_missing_nodes_csvs, map_node_ids_to_packs)
 
 
 import concurrent.futures
@@ -525,6 +526,146 @@ def store_node_ranks(nodes_dict):
     # Store rank in each node
     for rank, (node_id, node_data) in enumerate(sorted_nodes, 1):
         node_data['_rank'] = rank
+
+
+def load_missing_nodes_data(nodes_dict):
+    """
+    Load missing nodes from CSV files, map them to node packs, and create a
+    node-stats compatible CSV file.
+
+    The output CSV tracks which packs are referenced by original CSV entries,
+    with each entry counting once per pack.
+
+    Args:
+        nodes_dict: Dictionary of nodes with _node_ids and _nodename_pattern data
+
+    Returns:
+        Dictionary mapping node_id -> node_pack_id (or None if not found)
+    """
+    import csv
+    import os
+    import ast
+    from pathlib import Path
+
+    missing_nodes_path = Path('missing-nodes')
+    if not missing_nodes_path.exists() or not missing_nodes_path.is_dir():
+        return {}
+
+    # Find all CSV files in the missing-nodes directory
+    csv_files = list(missing_nodes_path.glob('*.csv'))
+    if not csv_files:
+        return {}
+
+    # Process each CSV file and track which packs are referenced by each entry
+    # Format: {pack_id: set of entry identifiers}
+    pack_to_entries = {}
+    entry_index = 0
+    node_id_to_pack = {}
+
+    for csv_file in csv_files:
+        try:
+            with open(csv_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+
+                for row in reader:
+                    content = row.get('content', '').strip()
+                    if not content:
+                        continue
+
+                    # Parse node IDs from this entry
+                    entry_node_ids = []
+                    try:
+                        # Try to evaluate it as a Python literal
+                        node_list = ast.literal_eval(content)
+
+                        if isinstance(node_list, list):
+                            entry_node_ids = node_list
+                        elif isinstance(node_list, str):
+                            entry_node_ids = [node_list]
+                    except (ValueError, SyntaxError):
+                        # If that fails, try simple string parsing
+                        cleaned = content.strip('[]"\' ')
+                        if cleaned:
+                            entry_node_ids = [cleaned]
+
+                    if not entry_node_ids:
+                        continue
+
+                    # Map these node IDs to packs
+                    entry_packs = set()
+                    for node_id in entry_node_ids:
+                        # Map this node ID to its pack (using existing function)
+                        if node_id not in node_id_to_pack:
+                            # We need to map it
+                            temp_mapping = map_node_ids_to_packs([node_id], nodes_dict)
+                            pack_id = temp_mapping.get(node_id)
+                            node_id_to_pack[node_id] = pack_id
+                        else:
+                            pack_id = node_id_to_pack[node_id]
+
+                        if pack_id is not None:
+                            entry_packs.add(pack_id)
+
+                    # Add this entry to each pack's entry set
+                    # Use .py extension so it's recognized by parse_python_files_csv
+                    entry_identifier = f"entry_{entry_index}.py"
+                    for pack_id in entry_packs:
+                        if pack_id not in pack_to_entries:
+                            pack_to_entries[pack_id] = set()
+                        pack_to_entries[pack_id].add(entry_identifier)
+
+                    entry_index += 1
+
+        except Exception as e:
+            print(f"Warning: Could not process {csv_file}: {e}")
+            continue
+
+    if not pack_to_entries:
+        return node_id_to_pack
+
+    # Create node-stats/missing-nodes directory if it doesn't exist
+    output_dir = Path('node-stats/missing-nodes')
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Delete old CSV files in node-stats/missing-nodes/ before creating new one
+    old_csv_files = list(output_dir.glob('*.csv'))
+    deleted_count = 0
+    for old_file in old_csv_files:
+        try:
+            os.remove(old_file)
+            deleted_count += 1
+        except Exception as e:
+            print(f"Warning: Could not delete {old_file}: {e}")
+
+    if deleted_count > 0:
+        print(f"[Deleted {deleted_count} old CSV files from node-stats/missing-nodes/]")
+
+    # Create new CSV file in node-stats format
+    # Format: pack_id, repository, entry_count, entry_identifier
+    output_file = output_dir / 'missing-nodes.csv'
+
+    try:
+        with open(output_file, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f)
+            # Write header
+            writer.writerow(['pack_id', 'repository', 'entry_count', 'entry_identifier'])
+
+            # Write data rows - one row per pack per entry
+            for pack_id in sorted(pack_to_entries.keys()):
+                pack_data = nodes_dict.get(pack_id, {})
+                repo_url = pack_data.get('repository', 'N/A')
+                entries = pack_to_entries[pack_id]
+                entry_count = len(entries)
+
+                # Write one row for each entry that referenced this pack
+                for entry_id in sorted(entries):
+                    writer.writerow([pack_id, repo_url, entry_count, entry_id])
+
+        print(f"[Created node-stats CSV: {output_file} with {len(pack_to_entries)} packs]")
+    except Exception as e:
+        print(f"Warning: Could not create node-stats CSV: {e}")
+
+    return node_id_to_pack
 
 
 def analyze_specific_dependency(nodes_dict, dep_name):
@@ -1260,6 +1401,7 @@ def parse_modifiers(query):
             - 'top': int, tuple, or None - top N filter (N for top N, -N for bottom N, (start, end) for range)
             - 'nodes': list or None - specific node IDs to filter
             - 'stats': list - stat filters (e.g., ['web-dirs', 'routes'])
+            - 'hide_markers': list - stat markers to hide in graphs
             - 'clean_query': str - query with modifiers stripped
     """
     result = {
@@ -1268,6 +1410,7 @@ def parse_modifiers(query):
         'top': None,
         'nodes': None,
         'stats': [],
+        'hide_markers': [],
         'clean_query': query
     }
 
@@ -1317,6 +1460,15 @@ def parse_modifiers(query):
                 # Comma-separated list
                 result['nodes'] = [n.strip() for n in nodes_spec.split(',') if n.strip()]
             result['clean_query'] = re.sub(r'&nodes\s+[^&]+', '', result['clean_query'], flags=re.IGNORECASE).strip()
+
+    # Parse &hide-markers (comma-separated list of stat names to hide)
+    if '&hide-markers' in query.lower():
+        hide_match = re.search(r'&hide-markers\s+([^&]+)', query, flags=re.IGNORECASE)
+        if hide_match:
+            markers_spec = hide_match.group(1).strip()
+            # Split by comma and normalize stat names
+            result['hide_markers'] = [m.strip().lower() for m in markers_spec.split(',') if m.strip()]
+            result['clean_query'] = re.sub(r'&hide-markers\s+[^&]+', '', result['clean_query'], flags=re.IGNORECASE).strip()
 
     return result
 
@@ -1388,6 +1540,10 @@ def print_help():
     print("         Example: /nodes &stat web-dirs &top 20")
     print("         Example: /nodes &stat routes &stat pip-calls")
     print("         Available stats auto-discovered from node-stats/ directory")
+    print("  &hide-markers <name,name> - Hide specific stat markers in graphs")
+    print("         Works with /graph commands")
+    print("         Example: /graph downloads &hide-markers missing-nodes")
+    print("         Example: /graph deps &hide-markers web-dirs,routes")
     print("  Combine: numpy &top 50 &save")
     print("\nOr type a dependency name directly (e.g., numpy, torch)")
 
@@ -1438,7 +1594,21 @@ def interactive_mode(nodes_dict):
     if cached_count > 0:
         print(f"\n[Loaded {cached_count} cached requirements.txt files]")
 
+    # Load node IDs from extension-node-map.json (needed for missing nodes mapping)
+    node_ids_count = load_node_ids_data(nodes_dict)
+    if node_ids_count > 0:
+        print(f"[Loaded node IDs for {node_ids_count} nodes]")
+
+    # Load missing nodes from CSV files and create node-stats CSV
+    # Must happen BEFORE load_all_node_stats so the CSV exists when stats are loaded
+    missing_node_mapping = load_missing_nodes_data(nodes_dict)
+    if missing_node_mapping:
+        matched_count = sum(1 for pack_id in missing_node_mapping.values() if pack_id is not None)
+        unmatched_count = sum(1 for pack_id in missing_node_mapping.values() if pack_id is None)
+        print(f"[Loaded {len(missing_node_mapping)} missing nodes: {matched_count} matched to packs, {unmatched_count} unmatched]")
+
     # Load all node statistics from node-stats/ directory (auto-discovers all stats)
+    # This now includes the missing-nodes CSV created above
     stat_counts = load_all_node_stats(nodes_dict, 'node-stats')
     if stat_counts:
         for stat_name, count in stat_counts.items():
@@ -1446,11 +1616,6 @@ def interactive_mode(nodes_dict):
                 # Format stat name for display (replace hyphens with spaces, capitalize)
                 display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
                 print(f"[Loaded {display_name} data for {count} nodes]")
-
-    # Load node IDs from extension-node-map.json
-    node_ids_count = load_node_ids_data(nodes_dict)
-    if node_ids_count > 0:
-        print(f"[Loaded node IDs for {node_ids_count} nodes]")
 
     # Pre-compile all dependencies for quick lookup
     dep_analysis = compile_dependencies(nodes_dict)
@@ -1483,9 +1648,14 @@ def interactive_mode(nodes_dict):
                         # Store overall ranks in node data for accurate graph display
                         store_node_ranks(nodes_dict)
 
-                        # Reload all data sources
-                        load_all_node_stats(nodes_dict, 'node-stats')
+                        # Reload node IDs first (needed for missing nodes mapping)
                         node_ids_count = load_node_ids_data(nodes_dict)
+
+                        # Load missing nodes and create CSV (must be before load_all_node_stats)
+                        missing_node_mapping = load_missing_nodes_data(nodes_dict)
+
+                        # Reload all data sources (includes the missing-nodes CSV created above)
+                        load_all_node_stats(nodes_dict, 'node-stats')
 
                         # Re-compile dependencies for the new data
                         dep_analysis = compile_dependencies(nodes_dict)
@@ -1594,6 +1764,7 @@ def interactive_mode(nodes_dict):
                 # Parse all modifiers using centralized function
                 mods = parse_modifiers(query)
                 save_results = mods['save']
+                hide_markers = mods['hide_markers']
 
                 # Track if we filtered by specific nodes (for percentile calculation)
                 is_nodes_filter = mods['nodes'] is not None
@@ -1611,13 +1782,17 @@ def interactive_mode(nodes_dict):
                     working_nodes, desc = apply_top_filter(working_nodes, mods['top'])
                     print(f"\n[Filtering to {desc}]")
 
+                # Show hidden markers info if specified
+                if hide_markers:
+                    print(f"\n[Hiding markers: {', '.join(hide_markers)}]")
+
                 # Create the appropriate graph type
                 if graph_type == 'downloads':
-                    create_downloads_graph(working_nodes, save_to_file=save_results, query_desc=original_query, log_scale=use_log_scale, show_indicators=show_indicators, full_nodes_for_percentiles=full_nodes_for_percentiles)
+                    create_downloads_graph(working_nodes, save_to_file=save_results, query_desc=original_query, log_scale=use_log_scale, show_indicators=show_indicators, full_nodes_for_percentiles=full_nodes_for_percentiles, hide_markers=hide_markers)
                 elif graph_type == 'deps':
-                    create_deps_graph(working_nodes, save_to_file=save_results, query_desc=original_query, full_nodes_for_percentiles=full_nodes_for_percentiles)
+                    create_deps_graph(working_nodes, save_to_file=save_results, query_desc=original_query, full_nodes_for_percentiles=full_nodes_for_percentiles, hide_markers=hide_markers)
                 elif graph_type == 'nodes':
-                    create_nodes_graph(working_nodes, save_to_file=save_results, query_desc=original_query, full_nodes_for_percentiles=full_nodes_for_percentiles)
+                    create_nodes_graph(working_nodes, save_to_file=save_results, query_desc=original_query, full_nodes_for_percentiles=full_nodes_for_percentiles, hide_markers=hide_markers)
                 else:
                     create_cumulative_graph(working_nodes, save_to_file=save_results, query_desc=original_query)
 

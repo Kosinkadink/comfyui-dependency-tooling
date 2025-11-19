@@ -426,3 +426,128 @@ def load_extension_node_map(nodes_dict, json_file_path='manager-files/extension-
                     count += 1
 
     return count
+
+
+def load_missing_nodes_csvs(csv_dir='missing-nodes'):
+    """
+    Load CSV files from the missing-nodes directory and extract node IDs.
+
+    CSV format:
+    - Column 1: content (quoted list of node IDs)
+    - Column 2: metadata
+
+    Args:
+        csv_dir: Directory containing the CSV files
+
+    Returns:
+        List of node IDs found across all CSV files
+    """
+    import csv
+    import ast
+
+    csv_path = Path(csv_dir)
+    if not csv_path.exists() or not csv_path.is_dir():
+        return []
+
+    all_node_ids = []
+
+    # Find all CSV files in the directory
+    csv_files = list(csv_path.glob('*.csv'))
+
+    if not csv_files:
+        return []
+
+    for csv_file in csv_files:
+        try:
+            with open(csv_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+
+                for row in reader:
+                    content = row.get('content', '').strip()
+
+                    if not content:
+                        continue
+
+                    # The content is a quoted list, so we need to parse it
+                    # It might be a Python list literal like "['NodeA', 'NodeB']"
+                    # or a JSON-style list like '["NodeA", "NodeB"]'
+                    try:
+                        # Try to evaluate it as a Python literal
+                        node_list = ast.literal_eval(content)
+
+                        if isinstance(node_list, list):
+                            all_node_ids.extend(node_list)
+                        elif isinstance(node_list, str):
+                            # Single node ID
+                            all_node_ids.append(node_list)
+                    except (ValueError, SyntaxError):
+                        # If that fails, try to parse it as a simple string
+                        # Remove quotes and brackets if present
+                        cleaned = content.strip('[]"\' ')
+                        if cleaned:
+                            all_node_ids.append(cleaned)
+
+        except Exception as e:
+            print(f"Warning: Could not load {csv_file}: {e}")
+            continue
+
+    return all_node_ids
+
+
+def map_node_ids_to_packs(node_ids, nodes_dict):
+    """
+    Map node IDs to their corresponding node packs.
+    Uses both direct matching and nodename_pattern matching.
+
+    Args:
+        node_ids: List of node IDs to map
+        nodes_dict: Dictionary of node packs with _node_ids and _nodename_pattern data
+
+    Returns:
+        Dictionary mapping node_id -> node_pack_id
+    """
+    import re
+
+    node_id_to_pack = {}
+
+    # Build reverse lookup for fast direct matching
+    pack_lookup = {}
+    pattern_packs = []
+
+    for pack_id, pack_data in nodes_dict.items():
+        # Collect packs with explicit node ID lists
+        if '_node_ids' in pack_data and pack_data['_node_ids']:
+            for node_id in pack_data['_node_ids']:
+                pack_lookup[node_id] = pack_id
+
+        # Collect packs with nodename patterns for later matching
+        if '_nodename_pattern' in pack_data:
+            pattern_packs.append((pack_id, pack_data['_nodename_pattern']))
+
+    # Map each node ID to a pack
+    for node_id in node_ids:
+        # Try direct lookup first
+        if node_id in pack_lookup:
+            node_id_to_pack[node_id] = pack_lookup[node_id]
+        else:
+            # Try pattern matching
+            matched = False
+            for pack_id, pattern in pattern_packs:
+                try:
+                    # The pattern might be a regex pattern
+                    if re.match(pattern, node_id):
+                        node_id_to_pack[node_id] = pack_id
+                        matched = True
+                        break
+                except re.error:
+                    # If regex fails, try simple string matching
+                    if pattern in node_id or node_id in pattern:
+                        node_id_to_pack[node_id] = pack_id
+                        matched = True
+                        break
+
+            if not matched:
+                # Store as unknown
+                node_id_to_pack[node_id] = None
+
+    return node_id_to_pack

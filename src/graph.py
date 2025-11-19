@@ -195,7 +195,7 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph c
         return False
 
 
-def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False, full_nodes_for_percentiles=None, metric='downloads'):
+def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False, full_nodes_for_percentiles=None, metric='downloads', hide_markers=None):
     """
     Create and display a graph showing downloads or dependency counts using plotly.
 
@@ -207,6 +207,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         show_indicators: Whether to show percentage milestone indicators (downloads only)
         full_nodes_for_percentiles: Full dataset for calculating percentiles (when using &top filter, downloads only)
         metric: 'downloads' or 'deps' - which metric to display on y-axis
+        hide_markers: List of stat names to hide markers for (e.g., ['missing-nodes', 'web-dirs'])
 
     Returns:
         True if successful, False otherwise
@@ -554,8 +555,10 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             {'symbol': 'triangle-right', 'color': '#c2185b', 'line_color': '#ad1457'}, # Pink triangle right
         ]
 
-        # Get stats to show as overlays (exclude primary stat)
-        overlay_stats = [stat for stat in all_stat_names if stat != primary_stat]
+        # Get stats to show as overlays (exclude primary stat and hidden markers)
+        hide_markers_normalized = [m.lower() for m in (hide_markers or [])]
+        overlay_stats = [stat for stat in all_stat_names
+                        if stat != primary_stat and stat not in hide_markers_normalized]
 
         for idx, stat_name in enumerate(overlay_stats):
             # Collect nodes that have this stat
@@ -811,7 +814,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         return False
 
 
-def create_deps_graph(nodes_dict, save_to_file=False, query_desc="/graph deps", full_nodes_for_percentiles=None):
+def create_deps_graph(nodes_dict, save_to_file=False, query_desc="/graph deps", full_nodes_for_percentiles=None, hide_markers=None):
     """
     Create and display a dependency count graph using plotly.
     This is a convenience wrapper around create_downloads_graph() with metric='deps'.
@@ -821,6 +824,7 @@ def create_deps_graph(nodes_dict, save_to_file=False, query_desc="/graph deps", 
         save_to_file: Whether to save the graph to a file
         query_desc: Query description for file naming and title
         full_nodes_for_percentiles: Full dataset for calculating percentiles (when using &top filter)
+        hide_markers: List of stat names to hide markers for
 
     Returns:
         True if successful, False otherwise
@@ -832,11 +836,12 @@ def create_deps_graph(nodes_dict, save_to_file=False, query_desc="/graph deps", 
         log_scale=False,
         show_indicators=False,
         full_nodes_for_percentiles=full_nodes_for_percentiles,
-        metric='deps'
+        metric='deps',
+        hide_markers=hide_markers
     )
 
 
-def create_nodes_graph(nodes_dict, save_to_file=False, query_desc="/graph nodes", full_nodes_for_percentiles=None):
+def create_nodes_graph(nodes_dict, save_to_file=False, query_desc="/graph nodes", full_nodes_for_percentiles=None, hide_markers=None):
     """
     Create and display an individual node count graph using plotly.
     This is a convenience wrapper around create_downloads_graph() with metric='nodes'.
@@ -846,6 +851,7 @@ def create_nodes_graph(nodes_dict, save_to_file=False, query_desc="/graph nodes"
         save_to_file: Whether to save the graph to a file
         query_desc: Query description for file naming and title
         full_nodes_for_percentiles: Full dataset for calculating percentiles (when using &top filter)
+        hide_markers: List of stat names to hide markers for
 
     Returns:
         True if successful, False otherwise
@@ -857,5 +863,6 @@ def create_nodes_graph(nodes_dict, save_to_file=False, query_desc="/graph nodes"
         log_scale=False,
         show_indicators=False,
         full_nodes_for_percentiles=full_nodes_for_percentiles,
-        metric='nodes'
+        metric='nodes',
+        hide_markers=hide_markers
     )
