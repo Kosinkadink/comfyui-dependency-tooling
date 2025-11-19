@@ -535,7 +535,7 @@ def map_node_ids_to_packs(node_ids, nodes_dict):
             for pack_id, pattern in pattern_packs:
                 try:
                     # The pattern might be a regex pattern
-                    if re.match(pattern, node_id):
+                    if re.search(pattern, node_id):
                         node_id_to_pack[node_id] = pack_id
                         matched = True
                         break
