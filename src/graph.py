@@ -51,7 +51,7 @@ def calculate_cumulative_dependencies(nodes_dict):
         nodes_dict: Dictionary of nodes
 
     Returns:
-        Tuple of (node_counts, cumulative_deps, node_names, node_dep_counts)
+        Tuple of (node_counts, cumulative_deps, node_names, node_dep_counts, node_repos)
     """
     # Sort nodes by downloads (rank)
     sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
@@ -60,6 +60,7 @@ def calculate_cumulative_dependencies(nodes_dict):
     cumulative_deps = []
     node_names = []
     node_dep_counts = []
+    node_repos = []
     unique_deps = set()
 
     for node_id, node_data in sorted_nodes:
@@ -87,8 +88,9 @@ def calculate_cumulative_dependencies(nodes_dict):
         cumulative_deps.append(len(unique_deps))
         node_names.append(f"{node_data.get('name', 'N/A')} ({node_id})")
         node_dep_counts.append(len(node_unique_deps))
+        node_repos.append(node_data.get('repository', 'N/A'))
 
-    return node_counts, cumulative_deps, node_names, node_dep_counts
+    return node_counts, cumulative_deps, node_names, node_dep_counts, node_repos
 
 
 def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph cumulative"):
@@ -109,12 +111,12 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph c
 
     try:
         print("Calculating cumulative dependencies...")
-        node_counts, cumulative_deps, node_names, node_dep_counts = calculate_cumulative_dependencies(nodes_dict)
+        node_counts, cumulative_deps, node_names, node_dep_counts, node_repos = calculate_cumulative_dependencies(nodes_dict)
 
-        # Create hover text with dependency counts
+        # Create hover text with dependency counts and repository URLs
         hover_texts = []
         for i in range(len(node_names)):
-            hover_texts.append(f"{node_names[i]}<br>Node dependencies: {node_dep_counts[i]}")
+            hover_texts.append(f"{node_names[i]}<br>Node dependencies: {node_dep_counts[i]}<br>Repository: {node_repos[i]}")
 
         # Create the figure
         fig = go.Figure()
@@ -285,6 +287,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         has_primary_downloads = []  # y-axis values
         has_primary_names = []
         has_primary_ids = []
+        has_primary_repos = []
         has_primary_dep_counts = []
         has_primary_download_counts = []  # actual downloads for hover
         has_primary_node_counts = []
@@ -294,6 +297,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         no_primary_downloads = []  # y-axis values
         no_primary_names = []
         no_primary_ids = []
+        no_primary_repos = []
         no_primary_dep_counts = []
         no_primary_download_counts = []  # actual downloads for hover
         no_primary_node_counts = []
@@ -350,6 +354,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 has_primary_downloads.append(y_value)
                 has_primary_names.append(node_data.get('name', node_id))
                 has_primary_ids.append(node_id)
+                has_primary_repos.append(node_data.get('repository', 'N/A'))
                 has_primary_dep_counts.append(dep_count)
                 has_primary_download_counts.append(download_count)
                 has_primary_node_counts.append(node_count_str)
@@ -359,6 +364,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 no_primary_downloads.append(y_value)
                 no_primary_names.append(node_data.get('name', node_id))
                 no_primary_ids.append(node_id)
+                no_primary_repos.append(node_data.get('repository', 'N/A'))
                 no_primary_dep_counts.append(dep_count)
                 no_primary_download_counts.append(download_count)
                 no_primary_node_counts.append(node_count_str)
@@ -393,13 +399,14 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             '<b>Rank #%{x}</b><br>',
             'Name: %{text}<br>',
             'ID: %{customdata[0]}<br>',
-            'Downloads: %{customdata[1]:,.0f}<br>',
-            'Dependencies: %{customdata[2]}<br>',
-            'Nodes: %{customdata[3]}<br>'
+            'Repository: %{customdata[1]}<br>',
+            'Downloads: %{customdata[2]:,.0f}<br>',
+            'Dependencies: %{customdata[3]}<br>',
+            'Nodes: %{customdata[4]}<br>'
         ]
 
         # Add all stats dynamically to hover template
-        customdata_index = 4  # Next available index in customdata
+        customdata_index = 5  # Next available index in customdata
         for stat_name in all_stat_names:
             display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
             hover_parts.append(f'{display_name}: %{{customdata[{customdata_index}]}}<br>')
@@ -409,10 +416,11 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         hover_template = ''.join(hover_parts)
 
         # Helper function to build customdata tuple for a node
-        def build_customdata(node_id, download_count, dep_count, node_count, stat_counts):
+        def build_customdata(node_id, repository, download_count, dep_count, node_count, stat_counts):
             """Build customdata tuple with dynamic stats."""
             data = [
                 node_id,
+                repository,
                 download_count,
                 dep_count,
                 node_count
@@ -439,6 +447,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             zero_customdata = [
                 build_customdata(
                     no_primary_ids[i],
+                    no_primary_repos[i],
                     no_primary_download_counts[i],
                     no_primary_dep_counts[i],
                     no_primary_node_counts[i],
@@ -479,6 +488,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             zero_customdata = [
                 build_customdata(
                     has_primary_ids[i],
+                    has_primary_repos[i],
                     has_primary_download_counts[i],
                     has_primary_dep_counts[i],
                     has_primary_node_counts[i],
@@ -510,6 +520,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             no_primary_customdata = [
                 build_customdata(
                     no_primary_ids[i],
+                    no_primary_repos[i],
                     no_primary_download_counts[i],
                     no_primary_dep_counts[i],
                     no_primary_node_counts[i],
@@ -537,6 +548,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             has_primary_customdata = [
                 build_customdata(
                     has_primary_ids[i],
+                    has_primary_repos[i],
                     has_primary_download_counts[i],
                     has_primary_dep_counts[i],
                     has_primary_node_counts[i],
@@ -598,6 +610,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             stat_y_values = []
             stat_names = []
             stat_ids = []
+            stat_repos = []
             stat_dep_counts = []
             stat_download_counts = []
             stat_node_counts = []
@@ -641,6 +654,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     stat_y_values.append(y_value)
                     stat_names.append(node_data.get('name', node_id))
                     stat_ids.append(node_id)
+                    stat_repos.append(node_data.get('repository', 'N/A'))
                     stat_dep_counts.append(dep_count)
                     stat_download_counts.append(download_count)
                     stat_node_counts.append(node_count_str)
@@ -652,6 +666,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 overlay_customdata = [
                     build_customdata(
                         stat_ids[i],
+                        stat_repos[i],
                         stat_download_counts[i],
                         stat_dep_counts[i],
                         stat_node_counts[i],
