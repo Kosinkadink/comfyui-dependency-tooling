@@ -128,18 +128,18 @@ Add `!` to the end of your search to automatically select the first matching nod
 
 **Update dependencies from requirements.txt:**
 
-The node registry data may have incomplete or outdated dependency information. Use `&update-reqs` to fetch actual dependencies from the repository's requirements.txt file:
+The node registry data may have incomplete or outdated dependency information. Use the `/update-reqs` command to fetch actual dependencies from the repository's requirements.txt file:
 
 ```bash
-> /nodes comfyui-kjnodes &update-reqs   # Update single node
-> /nodes &top 10 &update-reqs           # Update top 10 nodes
-> /nodes &all &update-reqs              # Update all nodes (may take a while!)
+> /update-reqs &nodes comfyui-kjnodes   # Update single node
+> /update-reqs &top 10                  # Update top 10 nodes
+> /update-reqs                          # Update all nodes (may take a while!)
 ```
 
 - Fetches requirements.txt from GitHub repositories
 - Updates dependencies in-place for analysis
 - Original dependencies from nodes.json are backed up
-- Works with all modifiers (&top, &nodes, etc.)
+- Works with all modifiers (&top, &nodes, &stat, etc.)
 - Updated dependencies persist for the current session
 
 ### `/update`
@@ -265,16 +265,16 @@ Filter results to only include specific nodes by their IDs.
 
 The file should contain one node ID per line.
 
-### `&stat=<name>`
+### `&stat <name>`
 Filter results to only include nodes that have a specific stat. Only works with `/nodes` command.
 
 Stats are automatically discovered from subdirectories in the `node-stats/` directory. Each subdirectory name becomes a stat that can be filtered.
 
 ```bash
-> /nodes &stat=web-dirs              # Show nodes with web directories
-> /nodes &stat=routes &top 50        # Show top 50 nodes with routes
-> /nodes &stat=pip-calls &all        # Show all nodes with pip calls
-> /nodes &stat=web-dirs &stat=routes # Show nodes with both stats
+> /nodes &stat web-dirs              # Show nodes with web directories
+> /nodes &stat routes &top 50        # Show top 50 nodes with routes
+> /nodes &stat pip-calls &all        # Show all nodes with pip calls
+> /nodes &stat web-dirs &stat routes # Show nodes with both stats
 ```
 
 **Available stats** (auto-discovered):
@@ -285,21 +285,22 @@ Stats are automatically discovered from subdirectories in the `node-stats/` dire
 
 **Features:**
 - Can be combined with &top, &all, &save modifiers
-- Multiple &stat= filters can be used together (nodes must match ALL filters)
+- Multiple &stat filters can be used together (nodes must match ALL filters)
 - Stat counts are shown in results (e.g., "Web Directories: 1 | Routes: 3")
 
-### `&update-reqs`
-Fetch actual dependencies from requirements.txt files in repositories. Only works with `/nodes` command.
+### `/update-reqs`
+Fetch actual dependencies from requirements.txt files in repositories.
 
 ```bash
-> /nodes comfyui-kjnodes &update-reqs      # Update single node
-> /nodes &top 10 &update-reqs              # Update top 10 nodes
+> /update-reqs &nodes comfyui-kjnodes      # Update single node
+> /update-reqs &top 10                     # Update top 10 nodes
+> /update-reqs &stat web-dirs              # Update nodes with web directories
 ```
 
 - Updates dependencies in-place for current session
 - Original dependencies are backed up
 - Supports GitHub repositories
-- Can be combined with other modifiers
+- Can be combined with &nodes, &top, and &stat modifiers
 
 ## Dependency Searches
 
@@ -368,21 +369,20 @@ python analysis.py -e "//graph deps &top 100 &save"           # Deps for top 100
 ### View dependency information for a specific node
 ```bash
 python analysis.py -e "//nodes comfyui-kjnodes"
-python analysis.py -e "//nodes comfyui-kjnodes &update-reqs"  # With actual requirements.txt
 python analysis.py -e "//nodes kjnodes!"                      # Auto-select first match
 ```
 
 ### Update dependencies from requirements.txt for top nodes
 ```bash
-python analysis.py -e "//nodes &top 20 &update-reqs"
+python analysis.py -e "/update-reqs &top 20"
 ```
 
 ### Filter nodes by stats
 ```bash
-python analysis.py -e "//nodes &stat=web-dirs"              # Show all nodes with web directories
-python analysis.py -e "//nodes &stat=routes &top 50"        # Show top 50 nodes with routes
-python analysis.py -e "//nodes &stat=pip-calls &all &save"  # Show and save all nodes with pip calls
-python analysis.py -e "//nodes &stat=routes &stat=web-dirs" # Show nodes with both stats
+python analysis.py -e "//nodes &stat web-dirs"              # Show all nodes with web directories
+python analysis.py -e "//nodes &stat routes &top 50"        # Show top 50 nodes with routes
+python analysis.py -e "//nodes &stat pip-calls &all &save"  # Show and save all nodes with pip calls
+python analysis.py -e "//nodes &stat routes &stat web-dirs" # Show nodes with both stats
 ```
 
 ### Interactive session workflow
@@ -396,11 +396,11 @@ $ python analysis.py
 > /nodes &top 10     # See top 10 nodes by downloads
 > /nodes comfyui-kjnodes  # View detailed deps for a specific node
 > /nodes kjnodes!    # Quick jump to first matching node
-> /nodes &stat=web-dirs &top 20      # Show top 20 nodes with web directories
-> /nodes &stat=routes &top 10           # Show top 10 nodes with routes
-> /nodes &stat=routes &stat=pip-calls   # Show nodes with both routes and pip calls
-> /nodes comfyui-kjnodes &update-reqs  # Update deps from requirements.txt
-> /nodes &top 5 &update-reqs  # Update top 5 nodes with actual requirements
+> /nodes &stat web-dirs &top 20      # Show top 20 nodes with web directories
+> /nodes &stat routes &top 10           # Show top 10 nodes with routes
+> /nodes &stat routes &stat pip-calls   # Show nodes with both routes and pip calls
+> /update-reqs &nodes comfyui-kjnodes  # Update deps from requirements.txt
+> /update-reqs &top 5  # Update top 5 nodes with actual requirements
 > /graph cumulative  # View cumulative dependencies graph
 > /graph downloads log  # View downloads with log scale
 > /graph deps        # View dependency counts by popularity rank

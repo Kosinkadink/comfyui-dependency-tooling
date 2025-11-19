@@ -1233,6 +1233,107 @@ def parse_nodes_modifier(query, nodes_dict):
     return filtered_nodes if filtered_nodes else nodes_dict
 
 
+def parse_modifiers(query):
+    """
+    Parse common query modifiers and return a dictionary of parsed values.
+
+    Returns:
+        dict with keys:
+            - 'save': bool - whether to save results
+            - 'all': bool - show all results
+            - 'top': int, tuple, or None - top N filter (N for top N, -N for bottom N, (start, end) for range)
+            - 'nodes': list or None - specific node IDs to filter
+            - 'stats': list - stat filters (e.g., ['web-dirs', 'routes'])
+            - 'clean_query': str - query with modifiers stripped
+    """
+    result = {
+        'save': False,
+        'all': False,
+        'top': None,
+        'nodes': None,
+        'stats': [],
+        'clean_query': query
+    }
+
+    # Parse &save
+    if '&save' in query.lower():
+        result['save'] = True
+        result['clean_query'] = re.sub(r'&save', '', result['clean_query'], flags=re.IGNORECASE).strip()
+
+    # Parse &all
+    if '&all' in query.lower():
+        result['all'] = True
+        result['clean_query'] = re.sub(r'&all', '', result['clean_query'], flags=re.IGNORECASE).strip()
+
+    # Parse &top (supports N, -N, or start:end)
+    if '&top' in query.lower():
+        # Try range pattern first, then single number
+        top_match = re.search(r'&top\s+((\d+):(\d+)|(-?\d+))', query.lower())
+        if top_match:
+            if top_match.group(2):  # Range format (start:end)
+                start = int(top_match.group(2))
+                end = int(top_match.group(3))
+                result['top'] = (start, end)
+            else:  # Single number format
+                result['top'] = int(top_match.group(4))
+            result['clean_query'] = re.sub(r'&top\s+((\d+:\d+)|(-?\d+))', '', result['clean_query'], flags=re.IGNORECASE).strip()
+
+    # Parse &stat <name> (can have multiple)
+    result['stats'] = re.findall(r'&stat\s+([^\s&]+)', query.lower())
+    if result['stats']:
+        result['clean_query'] = re.sub(r'&stat\s+[^\s&]+', '', result['clean_query'], flags=re.IGNORECASE).strip()
+
+    # Parse &nodes
+    if '&nodes' in query.lower():
+        nodes_match = re.search(r'&nodes\s+([^&]+)', query, flags=re.IGNORECASE)
+        if nodes_match:
+            nodes_spec = nodes_match.group(1).strip()
+            if nodes_spec.startswith('file:'):
+                # Load from file
+                file_path = nodes_spec[5:].strip()
+                try:
+                    with open(file_path, 'r') as f:
+                        result['nodes'] = [line.strip() for line in f if line.strip()]
+                except FileNotFoundError:
+                    print(f"Warning: File not found: {file_path}")
+                    result['nodes'] = []
+            else:
+                # Comma-separated list
+                result['nodes'] = [n.strip() for n in nodes_spec.split(',') if n.strip()]
+            result['clean_query'] = re.sub(r'&nodes\s+[^&]+', '', result['clean_query'], flags=re.IGNORECASE).strip()
+
+    return result
+
+
+def apply_top_filter(nodes_dict, top_value):
+    """
+    Apply top N filtering to nodes dictionary.
+
+    Args:
+        nodes_dict: Dictionary of nodes to filter
+        top_value: int (N for top N, -N for bottom N) or tuple (start, end) for range
+
+    Returns:
+        Filtered dictionary and description string
+    """
+    sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+
+    if isinstance(top_value, tuple):
+        # Range format: start:end (1-indexed, inclusive)
+        start, end = top_value
+        filtered = dict(sorted_nodes[start-1:end])
+        desc = f"nodes ranked {start}-{end} by downloads"
+    elif top_value > 0:
+        filtered = dict(sorted_nodes[:top_value])
+        desc = f"top {top_value} nodes by downloads"
+    else:
+        # Negative number means bottom N nodes
+        filtered = dict(sorted_nodes[top_value:])
+        desc = f"bottom {abs(top_value)} nodes by downloads"
+
+    return filtered, desc
+
+
 def print_help():
     """Print help information for commands and modifiers."""
     print("\nCommands:")
@@ -1243,6 +1344,9 @@ def print_help():
     print("  /nodes <node_id> - Show detailed dependency info for a specific node")
     print("  /nodes <search>! - Auto-select first matching node (fuzzy search)")
     print("  /update - Fetch latest nodes from registry and update nodes.json")
+    print("  /update-reqs - Fetch actual dependencies from requirements.txt")
+    print("         Supports &nodes, &top, and &stat filters")
+    print("         Example: /update-reqs &top 10")
     print("  /graph cumulative - Create cumulative dependencies visualization")
     print("  /graph downloads - Create total downloads visualization (linear scale)")
     print("  /graph downloads log - Create total downloads visualization (log scale)")
@@ -1259,17 +1363,15 @@ def print_help():
     print("  &all - Show all results without limits")
     print("  &top N - Only analyze top N nodes by downloads")
     print("         Use negative for bottom N (e.g., &top -10)")
+    print("         Use range for specific ranks (e.g., &top 10:20 for ranks 10-20)")
     print("  &nodes - Filter by specific node IDs")
     print("         Comma-separated: &nodes id1,id2")
     print("         From file: &nodes file:nodelist.txt")
-    print("  &stat=<name> - Filter to nodes with a specific stat")
+    print("  &stat <name> - Filter to nodes with a specific stat")
     print("         Works with /nodes command")
-    print("         Example: /nodes &stat=web-dirs &top 20")
-    print("         Example: /nodes &stat=routes &stat=pip-calls")
+    print("         Example: /nodes &stat web-dirs &top 20")
+    print("         Example: /nodes &stat routes &stat pip-calls")
     print("         Available stats auto-discovered from node-stats/ directory")
-    print("  &update-reqs - Fetch actual dependencies from requirements.txt")
-    print("         Works with /nodes command and node searches")
-    print("         Example: /nodes &top 10 &update-reqs")
     print("  Combine: numpy &top 50 &save")
     print("\nOr type a dependency name directly (e.g., numpy, torch)")
 
@@ -1376,6 +1478,48 @@ def interactive_mode(nodes_dict):
                 except Exception as e:
                     print(f"Error updating nodes.json: {e}")
 
+            elif query.lower() == '/update-reqs' or query.lower().startswith('/update-reqs '):
+                # Update requirements.txt from repositories
+                working_nodes = nodes_dict
+
+                # Parse all modifiers using centralized function
+                mods = parse_modifiers(query)
+
+                # Parse &nodes modifier first to filter by specific nodes
+                if mods['nodes']:
+                    working_nodes = {nid: ndata for nid, ndata in nodes_dict.items() if nid in mods['nodes']}
+                    print(f"\n[Filtering to {len(working_nodes)} specific nodes]")
+
+                # Apply &top filter if specified
+                if mods['top'] is not None:
+                    working_nodes, desc = apply_top_filter(working_nodes, mods['top'])
+                    print(f"\n[Filtering to {desc}]")
+
+                # Filter by stat if requested
+                for stat_filter in mods['stats']:
+                    filtered_nodes = {node_id: node_data for node_id, node_data in working_nodes.items()
+                                     if node_data.get('_stats', {}).get(stat_filter)}
+                    working_nodes = filtered_nodes
+                    display_name = stat_filter.replace('-', ' ').replace('_', ' ').title()
+                    print(f"\n[Filtering to nodes with {display_name}: {len(working_nodes)} nodes]")
+
+                # Update requirements for the filtered nodes
+                node_ids = list(working_nodes.keys())
+                if not node_ids:
+                    print("\nNo nodes to update.")
+                else:
+                    print(f"\nUpdating requirements for {len(node_ids)} nodes...")
+                    print("="*60)
+                    stats = update_node_requirements(nodes_dict, node_ids, original_deps_backup)
+                    print("="*60)
+                    print(f"\nUpdate Summary:")
+                    print(f"  Total: {stats['total']}")
+                    print(f"  Success: {stats['success']}")
+                    print(f"  Failed: {stats['failed']}")
+                    if stats['unsupported'] > 0:
+                        print(f"    - Unsupported host: {stats['unsupported']}")
+                    print()
+
             elif query.lower() == '/summary':
                 # Display the default summary
                 display_summary(nodes_dict)
@@ -1428,32 +1572,25 @@ def interactive_mode(nodes_dict):
                     print("  /graph nodes - Individual node count graph")
                     continue
 
-                # Parse &nodes modifier first to filter by specific nodes
-                working_nodes = parse_nodes_modifier(query, working_nodes)
+                # Parse all modifiers using centralized function
+                mods = parse_modifiers(query)
+                save_results = mods['save']
 
                 # Track if we filtered by specific nodes (for percentile calculation)
-                is_nodes_filter = '&nodes' in query.lower()
+                is_nodes_filter = mods['nodes'] is not None
 
-                # Parse &save modifier
-                if '&save' in query.lower():
-                    save_results = True
+                # Apply &nodes filter first
+                if mods['nodes']:
+                    working_nodes = {nid: ndata for nid, ndata in working_nodes.items() if nid in mods['nodes']}
+                    print(f"\n[Filtering to {len(working_nodes)} specific nodes]")
 
-                # Parse &top modifier if present
                 # Keep reference to full dataset before &top filtering (for percentile calculation)
                 full_nodes_for_percentiles = working_nodes if not is_nodes_filter else None
-                if '&top' in query.lower():
-                    top_match = re.search(r'&top\s+(-?\d+)', query.lower())
-                    if top_match:
-                        top_n = int(top_match.group(1))
-                        # Filter to top N nodes by downloads
-                        sorted_nodes = sorted(working_nodes.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
-                        if top_n > 0:
-                            working_nodes = dict(sorted_nodes[:top_n])
-                            print(f"\n[Filtering to top {top_n} nodes by downloads]")
-                        else:
-                            # Negative number means bottom N nodes
-                            working_nodes = dict(sorted_nodes[top_n:])
-                            print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
+
+                # Apply &top filter if specified
+                if mods['top'] is not None:
+                    working_nodes, desc = apply_top_filter(working_nodes, mods['top'])
+                    print(f"\n[Filtering to {desc}]")
 
                 # Create the appropriate graph type
                 if graph_type == 'downloads':
@@ -1659,36 +1796,12 @@ def interactive_mode(nodes_dict):
 
                 # Parse and strip modifiers to see if a node name remains
                 save_results = False
-                show_all = False
-                top_n = None
-                update_reqs = False
-                web_dir_only = False
-
-                # Strip modifiers from node_search to get the actual node name
-                if '&update-reqs' in node_search.lower():
-                    update_reqs = True
-                    node_search = re.sub(r'&update-reqs', '', node_search, flags=re.IGNORECASE).strip()
-
-                if '&save' in node_search.lower():
-                    save_results = True
-                    node_search = re.sub(r'&save', '', node_search, flags=re.IGNORECASE).strip()
-
-                if '&all' in node_search.lower():
-                    show_all = True
-                    node_search = re.sub(r'&all', '', node_search, flags=re.IGNORECASE).strip()
-
-                # Remove &stat= modifiers from search string (they're handled later in filtering)
-                node_search = re.sub(r'&stat=[^\s&]+', '', node_search, flags=re.IGNORECASE).strip()
-
-                if '&top' in node_search.lower():
-                    top_match = re.search(r'&top\s+(-?\d+)', node_search.lower())
-                    if top_match:
-                        top_n = int(top_match.group(1))
-                        node_search = re.sub(r'&top\s+-?\d+', '', node_search, flags=re.IGNORECASE).strip()
-
-                # Remove &nodes modifier if present
-                if '&nodes' in node_search.lower():
-                    node_search = re.sub(r'&nodes\s+[^&]+', '', node_search, flags=re.IGNORECASE).strip()
+                # Parse all modifiers using centralized function
+                mods = parse_modifiers(node_search)
+                save_results = mods['save']
+                show_all = mods['all']
+                top_n = mods['top']
+                node_search = mods['clean_query']
 
                 # If there's a node name/ID remaining after stripping modifiers, search for it
                 if node_search:
@@ -1698,20 +1811,6 @@ def interactive_mode(nodes_dict):
                         node_search = node_search[:-1].strip()  # Remove the !
 
                     node_search_lower = node_search.lower()
-
-                    # If &update-reqs is specified, update dependencies first
-                    if update_reqs:
-                        # Determine which node(s) to update
-                        node_to_update = None
-                        if node_search_lower in nodes_dict:
-                            node_to_update = node_search_lower
-                        elif node_search in nodes_dict:
-                            node_to_update = node_search
-
-                        if node_to_update:
-                            print(f"\nUpdating dependencies for {node_to_update}...")
-                            update_node_requirements(nodes_dict, [node_to_update], original_deps_backup)
-                            print()
 
                     # Try exact match first (case-insensitive)
                     if node_search_lower in nodes_dict:
@@ -1790,57 +1889,28 @@ def interactive_mode(nodes_dict):
                 # No node name specified, show the list
                 working_nodes = nodes_dict
 
+                # Parse all modifiers using centralized function
+                mods = parse_modifiers(query)
+                save_results = mods['save']
+                show_all = mods['all']
+
                 # Parse &nodes modifier first to filter by specific nodes
-                working_nodes = parse_nodes_modifier(query, working_nodes)
+                if mods['nodes']:
+                    working_nodes = {nid: ndata for nid, ndata in nodes_dict.items() if nid in mods['nodes']}
+                    print(f"\n[Filtering to {len(working_nodes)} specific nodes]")
 
-                # Parse modifiers
-                if '&save' in query.lower():
-                    save_results = True
+                # Apply &top filter if specified
+                if mods['top'] is not None:
+                    working_nodes, desc = apply_top_filter(working_nodes, mods['top'])
+                    print(f"\n[Filtering to {desc}]")
 
-                if '&all' in query.lower():
-                    show_all = True
-
-                if '&top' in query.lower():
-                    top_match = re.search(r'&top\s+(-?\d+)', query.lower())
-                    if top_match:
-                        top_n = int(top_match.group(1))
-                        # Filter to top N nodes by downloads
-                        sorted_nodes = sorted(working_nodes.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
-                        if top_n > 0:
-                            working_nodes = dict(sorted_nodes[:top_n])
-                            print(f"\n[Filtering to top {top_n} nodes by downloads]")
-                        else:
-                            # Negative number means bottom N nodes
-                            working_nodes = dict(sorted_nodes[top_n:])
-                            print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
-
-                # Filter by stat if requested (e.g., &stat=web-directories, &stat=routes)
-                stat_filters = re.findall(r'&stat=([^\s&]+)', query.lower())
-                for stat_filter in stat_filters:
+                # Filter by stat if requested
+                for stat_filter in mods['stats']:
                     filtered_nodes = {node_id: node_data for node_id, node_data in working_nodes.items()
                                      if node_data.get('_stats', {}).get(stat_filter)}
                     working_nodes = filtered_nodes
                     display_name = stat_filter.replace('-', ' ').replace('_', ' ').title()
                     print(f"\n[Filtering to nodes with {display_name}: {len(working_nodes)} nodes]")
-
-                # Handle &update-reqs modifier
-                if '&update-reqs' in query.lower():
-                    node_ids = list(working_nodes.keys())
-                    print(f"\nUpdating requirements for {len(node_ids)} nodes...")
-                    print("="*60)
-                    stats = update_node_requirements(nodes_dict, node_ids, original_deps_backup)
-                    print("="*60)
-                    print(f"\nUpdate Summary:")
-                    print(f"  Total: {stats['total']}")
-                    print(f"  Success: {stats['success']}")
-                    print(f"  Failed: {stats['failed']}")
-                    if stats['unsupported'] > 0:
-                        print(f"    - Unsupported host: {stats['unsupported']}")
-                    print()
-
-                    # Recompile dependencies after update
-                    dep_analysis = compile_dependencies(nodes_dict)
-                    all_deps_lower = {dep.lower(): dep for dep in dep_analysis['unique_base_dependencies']}
 
                 # Calculate ranks for ALL nodes (not just working_nodes)
                 full_rank_map = calculate_node_ranks(nodes_dict)
@@ -1853,11 +1923,14 @@ def interactive_mode(nodes_dict):
 
                 # Build output
                 output_lines = []
-                if top_n:
-                    if top_n > 0:
-                        output_lines.append(f"\nTop {min(len(nodes_to_display), top_n)} nodes by downloads:")
+                if mods['top']:
+                    if isinstance(mods['top'], tuple):
+                        start, end = mods['top']
+                        output_lines.append(f"\nNodes ranked {start}-{end} by downloads:")
+                    elif mods['top'] > 0:
+                        output_lines.append(f"\nTop {min(len(nodes_to_display), mods['top'])} nodes by downloads:")
                     else:
-                        output_lines.append(f"\nBottom {min(len(nodes_to_display), abs(top_n))} nodes by downloads:")
+                        output_lines.append(f"\nBottom {min(len(nodes_to_display), abs(mods['top']))} nodes by downloads:")
                 elif show_all:
                     output_lines.append(f"\nAll {len(nodes_to_display)} nodes by downloads:")
                 else:

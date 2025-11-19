@@ -22,6 +22,9 @@ python analysis.py -e "//summary"
 
 # Update nodes data from registry
 python analysis.py -e "//update"
+
+# Update requirements.txt from repositories
+python analysis.py -e "/update-reqs &top 10"
 ```
 
 ### Testing
@@ -87,7 +90,7 @@ The codebase follows a **functional programming** style with no classes. All cod
    - **Execute mode**: Single command execution via `-e` flag
 
 4. **Command Processing**:
-   - Commands start with `/` (e.g., `/summary`, `/list`, `/nodes`)
+   - Commands start with `/` (e.g., `/summary`, `/list`, `/nodes`, `/update-reqs`)
    - Modifiers start with `&` (e.g., `&save`, `&top 100`, `&dupes`)
    - Direct searches match dependency names (e.g., `numpy`, `torch*`)
 
@@ -135,9 +138,7 @@ Modifiers filter or modify command behavior. They are parsed using regex pattern
 - `&top N` / `&top -N` - Filter to top/bottom N nodes by downloads
 - `&dupes` - (For `/list`) Show only dependencies with version conflicts
 - `&nodes file:path.txt` - Filter to specific node IDs from file or comma-separated list
-- `&web-dir` - Filter to nodes with web directories
-- `&routes` - Filter to nodes with routes
-- `&update-reqs` - Fetch actual requirements.txt from repositories
+- `&stat <name>` - Filter to nodes with specific stats (e.g., `&stat web-dirs`, `&stat routes`)
 
 ### Registry API Integration
 
@@ -150,12 +151,13 @@ The tool fetches data from `https://api.comfy.org`:
 
 ### Requirements.txt Updating
 
-The `&update-reqs` modifier:
+The `/update-reqs` command:
 1. Constructs raw GitHub URL for requirements.txt
 2. Fetches file content with retry logic
 3. Parses requirements and updates node data in-memory
 4. Backs up original dependencies for comparison
 5. Caches fetched requirements to `updated_reqs/` for future sessions
+6. Supports `&nodes`, `&top`, and `&stat` modifiers for filtering which nodes to update
 
 ## Important Patterns
 
