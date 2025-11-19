@@ -245,6 +245,109 @@ def load_csv_data_to_nodes(nodes_dict, csv_directory, node_key):
     return count
 
 
+def load_all_node_stats(nodes_dict, stats_directory='node-stats'):
+    """
+    Auto-discover and load all node statistics from subdirectories.
+
+    Each subdirectory in stats_directory represents a stat type (e.g., 'web-directories', 'routes').
+    CSV files in each subdirectory are parsed and mapped to nodes.
+
+    Args:
+        nodes_dict: Dictionary of nodes to update (modified in-place)
+        stats_directory: Base directory containing stat subdirectories
+
+    Returns:
+        Dictionary mapping stat names to number of nodes with that stat
+    """
+    stats_path = Path(stats_directory)
+
+    # Initialize _stats dictionary for all nodes
+    for node_data in nodes_dict.values():
+        if '_stats' not in node_data:
+            node_data['_stats'] = {}
+
+    if not stats_path.exists():
+        return {}
+
+    # Discover all subdirectories (each is a stat type)
+    stat_counts = {}
+    stat_dirs = sorted([d for d in stats_path.iterdir() if d.is_dir()])
+
+    for stat_dir in stat_dirs:
+        stat_name = stat_dir.name
+
+        # Find all CSV files in this stat directory
+        csv_files = list(stat_dir.glob('*.csv'))
+        if not csv_files:
+            continue
+
+        # Parse all CSV files and collect data
+        all_data = {}
+        for csv_file in csv_files:
+            csv_data = parse_python_files_csv(csv_file)
+            for repo, files in csv_data.items():
+                if repo in all_data:
+                    all_data[repo].update(files)
+                else:
+                    all_data[repo] = files
+
+        # Map repository URLs to node IDs and add to nodes_dict
+        count = 0
+        for node_id, node_data in nodes_dict.items():
+            repo = node_data.get('repository', '')
+            if not repo or repo == 'N/A':
+                continue
+
+            repo_normalized = normalize_repository_url(repo)
+
+            # Check if this repo has data for this stat
+            for csv_repo, file_paths in all_data.items():
+                csv_repo_normalized = normalize_repository_url(csv_repo)
+
+                if csv_repo_normalized == repo_normalized:
+                    node_data['_stats'][stat_name] = sorted(list(file_paths))
+                    count += 1
+                    break
+
+        stat_counts[stat_name] = count
+
+    return stat_counts
+
+
+def get_node_stat_count(node_data, stat_name):
+    """
+    Get the count of files for a specific stat in a node.
+
+    Args:
+        node_data: Node data dictionary
+        stat_name: Name of the stat to count
+
+    Returns:
+        Count of files for the stat (0 if stat not present)
+    """
+    stats = node_data.get('_stats', {})
+    files = stats.get(stat_name, [])
+    return len(files) if files else 0
+
+
+def get_all_stat_names(nodes_dict):
+    """
+    Get all unique stat names that have been loaded across all nodes.
+
+    Args:
+        nodes_dict: Dictionary of all nodes
+
+    Returns:
+        Sorted list of stat names
+    """
+    stat_names = set()
+    for node_data in nodes_dict.values():
+        stats = node_data.get('_stats', {})
+        stat_names.update(stats.keys())
+
+    return sorted(stat_names)
+
+
 def load_extension_node_map(nodes_dict, json_file_path='manager-files/extension-node-map.json'):
     """
     Load extension-node-map.json and map node IDs to node packs.

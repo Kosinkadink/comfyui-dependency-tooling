@@ -14,7 +14,8 @@ from collections import defaultdict
 from src.graph import create_cumulative_graph, create_downloads_graph, create_deps_graph, create_nodes_graph
 from src.utils import (parse_dependency_string,
                        create_timestamped_filepath, load_csv_data_to_nodes,
-                       load_extension_node_map)
+                       load_extension_node_map, load_all_node_stats,
+                       get_node_stat_count, get_all_stat_names)
 
 
 import concurrent.futures
@@ -830,54 +831,6 @@ def delete_requirements_cache(node_id):
     return False
 
 
-# parse_web_directory_csv has been replaced by parse_python_files_csv in src/utils.py
-
-
-def load_web_directory_data(nodes_dict):
-    """
-    Load web directory data from CSV files in web-directories folder.
-    Maps repository URLs to node IDs and adds web directory info directly to nodes_dict.
-
-    Args:
-        nodes_dict: Dictionary of all nodes (modified in place)
-
-    Returns:
-        Number of nodes with web directory data
-    """
-    return load_csv_data_to_nodes(nodes_dict, 'web-directories', '_web_directories')
-
-
-# parse_routes_csv has been replaced by parse_python_files_csv in src/utils.py
-
-
-def load_routes_data(nodes_dict):
-    """
-    Load routes data from CSV files in route-any folder.
-    Maps repository URLs to node IDs and adds routes info directly to nodes_dict.
-
-    Args:
-        nodes_dict: Dictionary of all nodes (modified in place)
-
-    Returns:
-        Number of nodes with routes data
-    """
-    return load_csv_data_to_nodes(nodes_dict, 'route-any', '_routes')
-
-
-def load_pip_nonos_data(nodes_dict):
-    """
-    Load pip direct call data from CSV files in pip-nonos folder.
-    Maps repository URLs to node IDs and adds pip call info directly to nodes_dict.
-
-    Args:
-        nodes_dict: Dictionary of all nodes (modified in place)
-
-    Returns:
-        Number of nodes with pip-nonos data
-    """
-    return load_csv_data_to_nodes(nodes_dict, 'pip-nonos', '_pip_nonos')
-
-
 def load_node_ids_data(nodes_dict):
     """
     Load node IDs from extension-node-map.json in manager-files folder.
@@ -1125,21 +1078,18 @@ def display_node_dependencies(nodes_dict, node_id, original_deps_backup=None):
 
         print(f"Latest Version: {version} | Released: {latest_date}")
 
-        # Display web directory information if available
-        web_dirs = node_data.get('_web_directories', [])
-        if web_dirs:
-            print(f"\nWeb Directories:")
-            print("-" * 60)
-            for file_path in web_dirs:
-                print(f"  - {file_path}")
-
-        # Display routes information if available
-        routes = node_data.get('_routes', [])
-        if routes:
-            print(f"\nRoutes:")
-            print("-" * 60)
-            for file_path in routes:
-                print(f"  - {file_path}")
+        # Display all stats information dynamically
+        node_stats = node_data.get('_stats', {})
+        if node_stats:
+            for stat_name in sorted(node_stats.keys()):
+                stat_files = node_stats[stat_name]
+                if stat_files:
+                    # Format stat name for display
+                    display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
+                    print(f"\n{display_name}:")
+                    print("-" * 60)
+                    for file_path in stat_files:
+                        print(f"  - {file_path}")
 
         # Check if dependencies were updated from requirements.txt
         is_updated = latest_version_info.get('_updated_from_requirements', False)
@@ -1371,20 +1321,14 @@ def interactive_mode(nodes_dict):
     if cached_count > 0:
         print(f"\n[Loaded {cached_count} cached requirements.txt files]")
 
-    # Load web directory data from CSV files
-    web_dir_count = load_web_directory_data(nodes_dict)
-    if web_dir_count > 0:
-        print(f"[Loaded web directory data for {web_dir_count} nodes]")
-
-    # Load routes data from CSV files
-    routes_count = load_routes_data(nodes_dict)
-    if routes_count > 0:
-        print(f"[Loaded routes data for {routes_count} nodes]")
-
-    # Load pip-nonos data from CSV files
-    pip_nonos_count = load_pip_nonos_data(nodes_dict)
-    if pip_nonos_count > 0:
-        print(f"[Loaded pip direct call data for {pip_nonos_count} nodes]")
+    # Load all node statistics from node-stats/ directory (auto-discovers all stats)
+    stat_counts = load_all_node_stats(nodes_dict, 'node-stats')
+    if stat_counts:
+        for stat_name, count in stat_counts.items():
+            if count > 0:
+                # Format stat name for display (replace hyphens with spaces, capitalize)
+                display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
+                print(f"[Loaded {display_name} data for {count} nodes]")
 
     # Load node IDs from extension-node-map.json
     node_ids_count = load_node_ids_data(nodes_dict)
@@ -1420,9 +1364,7 @@ def interactive_mode(nodes_dict):
                         nodes_dict = load_nodes_to_dict()
 
                         # Reload all data sources
-                        web_dir_count = load_web_directory_data(nodes_dict)
-                        routes_count = load_routes_data(nodes_dict)
-                        pip_nonos_count = load_pip_nonos_data(nodes_dict)
+                        load_all_node_stats(nodes_dict, 'node-stats')
                         node_ids_count = load_node_ids_data(nodes_dict)
 
                         # Re-compile dependencies for the new data
@@ -1882,14 +1824,14 @@ def interactive_mode(nodes_dict):
                 # Filter by web directories if requested
                 if '&web-dir' in query.lower():
                     web_dir_nodes = {node_id: node_data for node_id, node_data in working_nodes.items()
-                                    if node_data.get('_web_directories')}
+                                    if node_data.get('_stats', {}).get('web-directories')}
                     working_nodes = web_dir_nodes
                     print(f"\n[Filtering to nodes with web directories: {len(working_nodes)} nodes]")
 
                 # Filter by routes if requested
                 if '&routes' in query.lower():
                     routes_nodes = {node_id: node_data for node_id, node_data in working_nodes.items()
-                                   if node_data.get('_routes')}
+                                   if node_data.get('_stats', {}).get('routes')}
                     working_nodes = routes_nodes
                     print(f"\n[Filtering to nodes with routes: {len(working_nodes)} nodes]")
 
@@ -1971,20 +1913,26 @@ def interactive_mode(nodes_dict):
                             if set(original_deps) != set(current_deps):
                                 has_mismatch = True
 
-                    # Check if node has web directory
-                    has_web_dir = bool(node_data.get('_web_directories'))
-                    has_routes = bool(node_data.get('_routes'))
-
                     # Get individual nodes count
                     node_ids = node_data.get('_node_ids', [])
                     node_count = len(node_ids) if node_ids else 0
                     has_node_pattern = node_data.get('_has_node_pattern', False)
 
+                    # Build stat indicators dynamically
+                    stat_indicators = []
+                    node_stats = node_data.get('_stats', {})
+                    for stat_name in sorted(node_stats.keys()):
+                        stat_count = len(node_stats[stat_name])
+                        if stat_count > 0:
+                            # Format stat name for display
+                            display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
+                            stat_indicators.append(f"{display_name}: {stat_count}")
+
                     # Format output
                     rank = full_rank_map.get(node_id, 'N/A')
                     asterisk = "*" if has_mismatch else ""
-                    web_indicator = " | Web: Yes" if has_web_dir else ""
-                    routes_indicator = " | Routes: Yes" if has_routes else ""
+                    stats_str = " | ".join(stat_indicators) if stat_indicators else ""
+                    stats_indicator = f" | {stats_str}" if stats_str else ""
 
                     # Show nodes indicator if we have explicit nodes or a pattern
                     if node_count > 0 or has_node_pattern:
@@ -1994,7 +1942,7 @@ def interactive_mode(nodes_dict):
                         nodes_indicator = ""
 
                     output_lines.append(f"\n{i}. {name} ({node_id})")
-                    output_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{web_indicator}{routes_indicator}{nodes_indicator}")
+                    output_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{stats_indicator}{nodes_indicator}")
                     output_lines.append(f"   Latest: {latest_date} | Version: {version}")
                     if len(description) > 100:
                         output_lines.append(f"   Description: {description[:100]}...")
@@ -2056,19 +2004,25 @@ def interactive_mode(nodes_dict):
                                 if set(original_deps) != set(current_deps):
                                     has_mismatch = True
 
-                        # Check if node has web directory
-                        has_web_dir = bool(node_data.get('_web_directories'))
-                        has_routes = bool(node_data.get('_routes'))
-
                         # Get individual nodes count
                         node_ids = node_data.get('_node_ids', [])
                         node_count = len(node_ids) if node_ids else 0
                         has_node_pattern = node_data.get('_has_node_pattern', False)
 
+                        # Build stat indicators dynamically
+                        stat_indicators = []
+                        node_stats = node_data.get('_stats', {})
+                        for stat_name in sorted(node_stats.keys()):
+                            stat_count = len(node_stats[stat_name])
+                            if stat_count > 0:
+                                # Format stat name for display
+                                display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
+                                stat_indicators.append(f"{display_name}: {stat_count}")
+
                         rank = full_rank_map.get(node_id, 'N/A')
                         asterisk = "*" if has_mismatch else ""
-                        web_indicator = " | Web: Yes" if has_web_dir else ""
-                        routes_indicator = " | Routes: Yes" if has_routes else ""
+                        stats_str = " | ".join(stat_indicators) if stat_indicators else ""
+                        stats_indicator = f" | {stats_str}" if stats_str else ""
 
                         # Show nodes indicator if we have explicit nodes or a pattern
                         if node_count > 0 or has_node_pattern:
@@ -2078,7 +2032,7 @@ def interactive_mode(nodes_dict):
                             nodes_indicator = ""
 
                         save_lines.append(f"\n{i}. {name} ({node_id})")
-                        save_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{web_indicator}{routes_indicator}{nodes_indicator}")
+                        save_lines.append(f"   Rank: #{rank} | Downloads: {downloads:,} | Stars: {stars:,} | Dependencies: {dep_count}{asterisk}{stats_indicator}{nodes_indicator}")
                         save_lines.append(f"   Latest: {latest_date} | Version: {version}")
                         save_lines.append(f"   Description: {description}")
                         save_lines.append(f"   Repository: {repo}")
@@ -2393,55 +2347,35 @@ def display_summary(nodes_dict):
             if len(node_info['git_deps']) > 2:
                 print(f"      ... and {len(node_info['git_deps']) - 2} more git dependencies")
 
-    # Web directory statistics
-    nodes_with_web_dirs = []
+    # Display statistics for all discovered stats dynamically
+    all_stat_names = get_all_stat_names(nodes_dict)
 
-    for node_id, node_data in nodes_dict.items():
-        web_dirs = node_data.get('_web_directories', [])
-        if web_dirs:
-            nodes_with_web_dirs.append({
-                'id': node_id,
-                'name': node_data.get('name', 'N/A'),
-                'files': web_dirs,
-                'downloads': node_data.get('downloads', 0)
-            })
+    for stat_name in all_stat_names:
+        nodes_with_stat = []
 
-    if nodes_with_web_dirs:
-        # Sort by downloads for examples
-        nodes_with_web_dirs.sort(key=lambda x: x['downloads'], reverse=True)
+        for node_id, node_data in nodes_dict.items():
+            stat_files = node_data.get('_stats', {}).get(stat_name, [])
+            if stat_files:
+                nodes_with_stat.append({
+                    'id': node_id,
+                    'name': node_data.get('name', 'N/A'),
+                    'files': stat_files,
+                    'downloads': node_data.get('downloads', 0)
+                })
 
-        print(f"\n\nWeb Directories: {len(nodes_with_web_dirs)} nodes")
-        print("  These nodes have .py files with WEB_DIRECTORY variable")
+        if nodes_with_stat:
+            # Sort by downloads for examples
+            nodes_with_stat.sort(key=lambda x: x['downloads'], reverse=True)
 
-        print(f"\n  Example nodes with web directories:")
-        for node_info in nodes_with_web_dirs[:5]:
-            print(f"\n    Node: {node_info['name']} ({node_info['id']})")
-            print(f"    Files: {', '.join(node_info['files'])}")
+            # Format stat name for display
+            display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
 
-    # Routes statistics
-    nodes_with_routes = []
+            print(f"\n\n{display_name}: {len(nodes_with_stat)} nodes")
 
-    for node_id, node_data in nodes_dict.items():
-        routes = node_data.get('_routes', [])
-        if routes:
-            nodes_with_routes.append({
-                'id': node_id,
-                'name': node_data.get('name', 'N/A'),
-                'files': routes,
-                'downloads': node_data.get('downloads', 0)
-            })
-
-    if nodes_with_routes:
-        # Sort by downloads for examples
-        nodes_with_routes.sort(key=lambda x: x['downloads'], reverse=True)
-
-        print(f"\n\nRoutes: {len(nodes_with_routes)} nodes")
-        print("  These nodes have .py files with route-any decorator")
-
-        print(f"\n  Example nodes with routes:")
-        for node_info in nodes_with_routes[:5]:
-            print(f"\n    Node: {node_info['name']} ({node_info['id']})")
-            print(f"    Files: {', '.join(node_info['files'])}")
+            print(f"\n  Example nodes with {display_name.lower()}:")
+            for node_info in nodes_with_stat[:5]:
+                print(f"\n    Node: {node_info['name']} ({node_info['id']})")
+                print(f"    Files: {', '.join(node_info['files'])}")
 
 
 def main():

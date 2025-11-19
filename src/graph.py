@@ -5,7 +5,7 @@ Graph visualization functionality for ComfyUI dependency analysis.
 import re
 from datetime import datetime
 from pathlib import Path
-from .utils import parse_dependency_string, create_timestamped_filepath
+from .utils import parse_dependency_string, create_timestamped_filepath, get_all_stat_names, get_node_stat_count
 
 # Try to import plotly for graph visualization
 try:
@@ -245,50 +245,31 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         # Always sort nodes by downloads (popularity ranking)
         sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
 
-        # Separate lists for nodes with and without web directories
+        # Get all available stat names
+        all_stat_names = sorted(get_all_stat_names(nodes_dict))
+
+        # Primary categorization stat (defaults to 'web-directories' if available)
+        primary_stat = 'web-directories' if 'web-directories' in all_stat_names else (all_stat_names[0] if all_stat_names else None)
+
+        # Separate lists for nodes with and without the primary stat
         # Note: *_downloads lists contain y-axis values (downloads or deps based on metric)
-        web_dir_ranks = []
-        web_dir_downloads = []  # y-axis values
-        web_dir_names = []
-        web_dir_ids = []
-        web_dir_dep_counts = []
-        web_dir_download_counts = []  # actual downloads for hover
-        web_dir_route_counts = []
-        web_dir_pip_nonos_counts = []
-        web_dir_node_counts = []
+        has_primary_ranks = []
+        has_primary_downloads = []  # y-axis values
+        has_primary_names = []
+        has_primary_ids = []
+        has_primary_dep_counts = []
+        has_primary_download_counts = []  # actual downloads for hover
+        has_primary_node_counts = []
+        has_primary_stats = []  # List of stat count dicts
 
-        no_web_dir_ranks = []
-        no_web_dir_downloads = []  # y-axis values
-        no_web_dir_names = []
-        no_web_dir_ids = []
-        no_web_dir_dep_counts = []
-        no_web_dir_download_counts = []  # actual downloads for hover
-        no_web_dir_route_counts = []
-        no_web_dir_pip_nonos_counts = []
-        no_web_dir_node_counts = []
-
-        # Track nodes with routes for visual indicator
-        routes_ranks = []
-        routes_downloads = []  # y-axis values
-        routes_names = []
-        routes_ids = []
-        routes_counts = []
-        routes_dep_counts = []
-        routes_download_counts = []  # actual downloads for hover
-        routes_web_dir_status = []
-        routes_node_counts = []
-
-        # Track nodes with pip-nonos for visual indicator
-        pip_nonos_ranks = []
-        pip_nonos_downloads = []  # y-axis values
-        pip_nonos_names = []
-        pip_nonos_ids = []
-        pip_nonos_counts = []
-        pip_nonos_dep_counts = []
-        pip_nonos_download_counts = []  # actual downloads for hover
-        pip_nonos_route_counts = []
-        pip_nonos_web_dir_status = []
-        pip_nonos_node_counts = []
+        no_primary_ranks = []
+        no_primary_downloads = []  # y-axis values
+        no_primary_names = []
+        no_primary_ids = []
+        no_primary_dep_counts = []
+        no_primary_download_counts = []  # actual downloads for hover
+        no_primary_node_counts = []
+        no_primary_stats = []  # List of stat count dicts
 
         cumulative_downloads = []
 
@@ -311,12 +292,13 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             running_total += download_count
             cumulative_downloads.append(running_total)
 
-            # Check if node has web directory, routes, and pip-nonos
-            has_web_dir = bool(node_data.get('_web_directories'))
-            has_routes = bool(node_data.get('_routes'))
-            route_count = len(node_data.get('_routes', []))
-            has_pip_nonos = bool(node_data.get('_pip_nonos'))
-            pip_nonos_count = len(node_data.get('_pip_nonos', []))
+            # Collect all stat counts for this node dynamically
+            node_stat_counts = {}
+            for stat_name in all_stat_names:
+                node_stat_counts[stat_name] = get_node_stat_count(node_data, stat_name)
+
+            # Check if node has the primary stat
+            has_primary_stat = node_stat_counts.get(primary_stat, 0) > 0 if primary_stat else False
 
             # Get individual nodes count
             node_ids = node_data.get('_node_ids', [])
@@ -326,52 +308,25 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             # Format node count string with optional asterisk for pattern-based matching
             node_count_str = f"{individual_node_count}*" if has_node_pattern else str(individual_node_count)
 
-            # Track routes separately for visual indicator
-            if has_routes:
-                routes_ranks.append(i)
-                routes_downloads.append(y_value)  # y_value is download_count or dep_count based on metric
-                routes_names.append(node_data.get('name', node_id))
-                routes_ids.append(node_id)
-                routes_counts.append(route_count)
-                routes_dep_counts.append(dep_count)
-                routes_download_counts.append(download_count)
-                routes_web_dir_status.append('Yes' if has_web_dir else 'No')
-                routes_node_counts.append(node_count_str)
-
-            # Track pip-nonos separately for visual indicator
-            if has_pip_nonos:
-                pip_nonos_ranks.append(i)
-                pip_nonos_downloads.append(y_value)  # y_value is download_count or dep_count based on metric
-                pip_nonos_names.append(node_data.get('name', node_id))
-                pip_nonos_ids.append(node_id)
-                pip_nonos_counts.append(pip_nonos_count)
-                pip_nonos_dep_counts.append(dep_count)
-                pip_nonos_download_counts.append(download_count)
-                pip_nonos_route_counts.append(route_count)
-                pip_nonos_web_dir_status.append('Yes' if has_web_dir else 'No')
-                pip_nonos_node_counts.append(node_count_str)
-
-            # Append to appropriate lists
-            if has_web_dir:
-                web_dir_ranks.append(i)
-                web_dir_downloads.append(y_value)  # y_value is download_count or dep_count based on metric
-                web_dir_names.append(node_data.get('name', node_id))
-                web_dir_ids.append(node_id)
-                web_dir_dep_counts.append(dep_count)
-                web_dir_download_counts.append(download_count)
-                web_dir_route_counts.append(route_count)
-                web_dir_pip_nonos_counts.append(pip_nonos_count)
-                web_dir_node_counts.append(node_count_str)
+            # Append to appropriate lists based on primary stat
+            if has_primary_stat:
+                has_primary_ranks.append(i)
+                has_primary_downloads.append(y_value)
+                has_primary_names.append(node_data.get('name', node_id))
+                has_primary_ids.append(node_id)
+                has_primary_dep_counts.append(dep_count)
+                has_primary_download_counts.append(download_count)
+                has_primary_node_counts.append(node_count_str)
+                has_primary_stats.append(node_stat_counts)
             else:
-                no_web_dir_ranks.append(i)
-                no_web_dir_downloads.append(y_value)  # y_value is download_count or dep_count based on metric
-                no_web_dir_names.append(node_data.get('name', node_id))
-                no_web_dir_ids.append(node_id)
-                no_web_dir_dep_counts.append(dep_count)
-                no_web_dir_download_counts.append(download_count)
-                no_web_dir_route_counts.append(route_count)
-                no_web_dir_pip_nonos_counts.append(pip_nonos_count)
-                no_web_dir_node_counts.append(node_count_str)
+                no_primary_ranks.append(i)
+                no_primary_downloads.append(y_value)
+                no_primary_names.append(node_data.get('name', node_id))
+                no_primary_ids.append(node_id)
+                no_primary_dep_counts.append(dep_count)
+                no_primary_download_counts.append(download_count)
+                no_primary_node_counts.append(node_count_str)
+                no_primary_stats.append(node_stat_counts)
 
         # Calculate percentage milestones based on full dataset if provided
         # This ensures that when using &top filter, percentiles are relative to ALL downloads
@@ -396,177 +351,177 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         # Create the figure
         fig = go.Figure()
 
-        # Build unified hover template - shows all information regardless of metric
+        # Build unified hover template dynamically - shows all information regardless of metric
         # Note: Nodes field shows count + optional * for pattern-based matching
-        hover_template = ('<b>Rank #%{x}</b><br>' +
-                         'Name: %{text}<br>' +
-                         'ID: %{customdata[0]}<br>' +
-                         'Downloads: %{customdata[1]:,.0f}<br>' +
-                         'Dependencies: %{customdata[2]}<br>' +
-                         'Nodes: %{customdata[3]}<br>' +
-                         'Routes: %{customdata[4]}<br>' +
-                         'Pip Calls: %{customdata[5]}<br>' +
-                         'Web Directory: %{customdata[6]}<br>' +
-                         '<extra></extra>')
+        hover_parts = [
+            '<b>Rank #%{x}</b><br>',
+            'Name: %{text}<br>',
+            'ID: %{customdata[0]}<br>',
+            'Downloads: %{customdata[1]:,.0f}<br>',
+            'Dependencies: %{customdata[2]}<br>',
+            'Nodes: %{customdata[3]}<br>'
+        ]
+
+        # Add all stats dynamically to hover template
+        customdata_index = 4  # Next available index in customdata
+        for stat_name in all_stat_names:
+            display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
+            hover_parts.append(f'{display_name}: %{{customdata[{customdata_index}]}}<br>')
+            customdata_index += 1
+
+        hover_parts.append('<extra></extra>')
+        hover_template = ''.join(hover_parts)
+
+        # Helper function to build customdata tuple for a node
+        def build_customdata(node_id, download_count, dep_count, node_count, stat_counts):
+            """Build customdata tuple with dynamic stats."""
+            data = [
+                node_id,
+                download_count,
+                dep_count,
+                node_count
+            ]
+            # Add all stat counts in the same order as hover template
+            for stat_name in all_stat_names:
+                data.append(stat_counts.get(stat_name, 0))
+            return tuple(data)
 
         # Add visual indicators for zero-value bars (small circles at bottom)
         # Only add indicators for zeros in the metric being displayed
         # These are added FIRST so they appear behind everything else
         if metric == 'downloads':
-            # Check for zero downloads in nodes without web directories
-            zero_no_web_indices = [i for i in range(len(no_web_dir_download_counts)) if no_web_dir_download_counts[i] == 0]
+            zero_no_primary_indices = [i for i in range(len(no_primary_download_counts)) if no_primary_download_counts[i] == 0]
         elif metric == 'deps':
-            # Check for zero dependencies in nodes without web directories
-            zero_no_web_indices = [i for i in range(len(no_web_dir_dep_counts)) if no_web_dir_dep_counts[i] == 0]
+            zero_no_primary_indices = [i for i in range(len(no_primary_dep_counts)) if no_primary_dep_counts[i] == 0]
         else:  # metric == 'nodes'
-            # Check for zero node counts in nodes without web directories
             # Note: node_counts are strings like "0" or "0*", so strip asterisk and compare
-            zero_no_web_indices = [i for i in range(len(no_web_dir_node_counts)) if no_web_dir_node_counts[i].rstrip('*') == '0']
+            zero_no_primary_indices = [i for i in range(len(no_primary_node_counts)) if no_primary_node_counts[i].rstrip('*') == '0']
 
-        if zero_no_web_indices:
-            zero_no_web_ranks = [no_web_dir_ranks[i] for i in zero_no_web_indices]
-            zero_no_web_names = [no_web_dir_names[i] for i in zero_no_web_indices]
-            zero_no_web_ids = [no_web_dir_ids[i] for i in zero_no_web_indices]
-            zero_no_web_dep_counts = [no_web_dir_dep_counts[i] for i in zero_no_web_indices]
-            zero_no_web_download_counts = [no_web_dir_download_counts[i] for i in zero_no_web_indices]
-            zero_no_web_route_counts = [no_web_dir_route_counts[i] for i in zero_no_web_indices]
-            zero_no_web_pip_nonos_counts = [no_web_dir_pip_nonos_counts[i] for i in zero_no_web_indices]
-            zero_no_web_node_counts = [no_web_dir_node_counts[i] for i in zero_no_web_indices]
+        if zero_no_primary_indices:
+            zero_no_primary_ranks = [no_primary_ranks[i] for i in zero_no_primary_indices]
+            zero_no_primary_names = [no_primary_names[i] for i in zero_no_primary_indices]
+            zero_customdata = [
+                build_customdata(
+                    no_primary_ids[i],
+                    no_primary_download_counts[i],
+                    no_primary_dep_counts[i],
+                    no_primary_node_counts[i],
+                    no_primary_stats[i]
+                )
+                for i in zero_no_primary_indices
+            ]
 
+            primary_label = primary_stat.replace('-', ' ').replace('_', ' ').title() if primary_stat else "Primary"
             fig.add_trace(go.Scatter(
-                x=zero_no_web_ranks,
-                y=[0] * len(zero_no_web_ranks),  # Position at y=0
+                x=zero_no_primary_ranks,
+                y=[0] * len(zero_no_primary_ranks),  # Position at y=0
                 mode='markers',
-                name='Zero Value (No Web Dir)',
+                name=f'Zero Value (No {primary_label})',
                 marker=dict(
                     symbol='circle',
                     size=6,
-                    color='#3498db',  # Blue (matching no web dir color)
+                    color='#3498db',  # Blue
                     line=dict(width=1, color='#2c3e50')
                 ),
-                customdata=list(zip(zero_no_web_ids, zero_no_web_download_counts, zero_no_web_dep_counts,
-                                   zero_no_web_node_counts, zero_no_web_route_counts, zero_no_web_pip_nonos_counts,
-                                   ['No'] * len(zero_no_web_ids))),
+                customdata=zero_customdata,
                 hovertemplate=hover_template,
-                text=zero_no_web_names,
+                text=zero_no_primary_names,
                 showlegend=False  # Don't clutter legend
             ))
 
-        # Check for zero values in nodes with web directories
+        # Check for zero values in nodes with primary stat
         if metric == 'downloads':
-            zero_web_indices = [i for i in range(len(web_dir_download_counts)) if web_dir_download_counts[i] == 0]
+            zero_primary_indices = [i for i in range(len(has_primary_download_counts)) if has_primary_download_counts[i] == 0]
         elif metric == 'deps':
-            zero_web_indices = [i for i in range(len(web_dir_dep_counts)) if web_dir_dep_counts[i] == 0]
+            zero_primary_indices = [i for i in range(len(has_primary_dep_counts)) if has_primary_dep_counts[i] == 0]
         else:  # metric == 'nodes'
             # Note: node_counts are strings like "0" or "0*", so strip asterisk and compare
-            zero_web_indices = [i for i in range(len(web_dir_node_counts)) if web_dir_node_counts[i].rstrip('*') == '0']
+            zero_primary_indices = [i for i in range(len(has_primary_node_counts)) if has_primary_node_counts[i].rstrip('*') == '0']
 
-        if zero_web_indices:
-            zero_web_ranks = [web_dir_ranks[i] for i in zero_web_indices]
-            zero_web_names = [web_dir_names[i] for i in zero_web_indices]
-            zero_web_ids = [web_dir_ids[i] for i in zero_web_indices]
-            zero_web_dep_counts = [web_dir_dep_counts[i] for i in zero_web_indices]
-            zero_web_download_counts = [web_dir_download_counts[i] for i in zero_web_indices]
-            zero_web_route_counts = [web_dir_route_counts[i] for i in zero_web_indices]
-            zero_web_pip_nonos_counts = [web_dir_pip_nonos_counts[i] for i in zero_web_indices]
-            zero_web_node_counts = [web_dir_node_counts[i] for i in zero_web_indices]
+        if zero_primary_indices:
+            zero_primary_ranks = [has_primary_ranks[i] for i in zero_primary_indices]
+            zero_primary_names = [has_primary_names[i] for i in zero_primary_indices]
+            zero_customdata = [
+                build_customdata(
+                    has_primary_ids[i],
+                    has_primary_download_counts[i],
+                    has_primary_dep_counts[i],
+                    has_primary_node_counts[i],
+                    has_primary_stats[i]
+                )
+                for i in zero_primary_indices
+            ]
 
             fig.add_trace(go.Scatter(
-                x=zero_web_ranks,
-                y=[0] * len(zero_web_ranks),  # Position at y=0
+                x=zero_primary_ranks,
+                y=[0] * len(zero_primary_ranks),  # Position at y=0
                 mode='markers',
-                name='Zero Value (Has Web Dir)',
+                name=f'Zero Value (Has {primary_label})',
                 marker=dict(
                     symbol='circle',
                     size=6,
-                    color='#2ecc71',  # Green (matching web dir color)
+                    color='#2ecc71',  # Green
                     line=dict(width=1, color='#27ae60')
                 ),
-                customdata=list(zip(zero_web_ids, zero_web_download_counts, zero_web_dep_counts,
-                                   zero_web_node_counts, zero_web_route_counts, zero_web_pip_nonos_counts,
-                                   ['Yes'] * len(zero_web_ids))),
+                customdata=zero_customdata,
                 hovertemplate=hover_template,
-                text=zero_web_names,
+                text=zero_primary_names,
                 showlegend=False  # Don't clutter legend
             ))
 
         # Add bar charts after zero-value indicators
-        # Add trace for nodes without web directories (blue)
-        if no_web_dir_ranks:
+        # Add trace for nodes without primary stat (blue)
+        if no_primary_ranks:
+            no_primary_customdata = [
+                build_customdata(
+                    no_primary_ids[i],
+                    no_primary_download_counts[i],
+                    no_primary_dep_counts[i],
+                    no_primary_node_counts[i],
+                    no_primary_stats[i]
+                )
+                for i in range(len(no_primary_ranks))
+            ]
+
             fig.add_trace(go.Bar(
-                x=no_web_dir_ranks,
-                y=no_web_dir_downloads,
-                name='No Web Directory',
+                x=no_primary_ranks,
+                y=no_primary_downloads,
+                name=f'No {primary_label}',
                 marker=dict(
                     color='#3498db',  # Blue
                     line=dict(width=0.5, color='#2c3e50')
                 ),
-                text=no_web_dir_names,
+                text=no_primary_names,
                 textposition='auto',
-                customdata=list(zip(no_web_dir_ids, no_web_dir_download_counts, no_web_dir_dep_counts,
-                                   no_web_dir_node_counts, no_web_dir_route_counts, no_web_dir_pip_nonos_counts,
-                                   ['No'] * len(no_web_dir_ids))),
+                customdata=no_primary_customdata,
                 hovertemplate=hover_template
             ))
 
-        # Add trace for nodes with web directories (green)
-        if web_dir_ranks:
+        # Add trace for nodes with primary stat (green)
+        if has_primary_ranks:
+            has_primary_customdata = [
+                build_customdata(
+                    has_primary_ids[i],
+                    has_primary_download_counts[i],
+                    has_primary_dep_counts[i],
+                    has_primary_node_counts[i],
+                    has_primary_stats[i]
+                )
+                for i in range(len(has_primary_ranks))
+            ]
+
             fig.add_trace(go.Bar(
-                x=web_dir_ranks,
-                y=web_dir_downloads,
-                name='Has Web Directory',
+                x=has_primary_ranks,
+                y=has_primary_downloads,
+                name=f'Has {primary_label}',
                 marker=dict(
                     color='#2ecc71',  # Green
                     line=dict(width=0.5, color='#27ae60')
                 ),
-                text=web_dir_names,
+                text=has_primary_names,
                 textposition='auto',
-                customdata=list(zip(web_dir_ids, web_dir_download_counts, web_dir_dep_counts,
-                                   web_dir_node_counts, web_dir_route_counts, web_dir_pip_nonos_counts,
-                                   ['Yes'] * len(web_dir_ids))),
+                customdata=has_primary_customdata,
                 hovertemplate=hover_template
-            ))
-
-        # Add visual indicator for nodes with routes (star markers on top of bars)
-        # These are added LAST so they appear on top of everything else
-        if routes_ranks:
-            fig.add_trace(go.Scatter(
-                x=routes_ranks,
-                y=routes_downloads,
-                mode='markers',
-                name='Has Routes',
-                marker=dict(
-                    symbol='star',
-                    size=8,
-                    color='#e74c3c',  # Red
-                    line=dict(width=1, color='#c0392b')
-                ),
-                customdata=list(zip(routes_ids, routes_download_counts, routes_dep_counts,
-                                   routes_node_counts, routes_counts, [0] * len(routes_ids),
-                                   routes_web_dir_status)),
-                hovertemplate=hover_template,
-                text=routes_names
-            ))
-
-        # Add visual indicator for nodes with pip-nonos (diamond markers on top of bars)
-        # These are added LAST so they appear on top of everything else
-        if pip_nonos_ranks:
-            fig.add_trace(go.Scatter(
-                x=pip_nonos_ranks,
-                y=pip_nonos_downloads,
-                mode='markers',
-                name='Has Pip Calls',
-                marker=dict(
-                    symbol='diamond',
-                    size=8,
-                    color='#f39c12',  # Orange
-                    line=dict(width=1, color='#d68910')
-                ),
-                customdata=list(zip(pip_nonos_ids, pip_nonos_download_counts, pip_nonos_dep_counts,
-                                   pip_nonos_node_counts, pip_nonos_route_counts, pip_nonos_counts,
-                                   pip_nonos_web_dir_status)),
-                hovertemplate=hover_template,
-                text=pip_nonos_names
             ))
 
         # Build title and axis labels based on metric
@@ -614,9 +569,9 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         if show_indicators:
             # Create a mapping of rank to downloads for milestone lookup
             rank_to_downloads = {}
-            for rank, download in zip(web_dir_ranks, web_dir_downloads):
+            for rank, download in zip(has_primary_ranks, has_primary_downloads):
                 rank_to_downloads[rank] = download
-            for rank, download in zip(no_web_dir_ranks, no_web_dir_downloads):
+            for rank, download in zip(no_primary_ranks, no_primary_downloads):
                 rank_to_downloads[rank] = download
 
             for percentage, node_index in milestones.items():
