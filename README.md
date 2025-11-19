@@ -265,31 +265,28 @@ Filter results to only include specific nodes by their IDs.
 
 The file should contain one node ID per line.
 
-### `&web-dir`
-Filter results to only include nodes with web directories (nodes that have .py files with WEB_DIRECTORY variable). Only works with `/nodes` command.
+### `&stat=<name>`
+Filter results to only include nodes that have a specific stat. Only works with `/nodes` command.
+
+Stats are automatically discovered from subdirectories in the `node-stats/` directory. Each subdirectory name becomes a stat that can be filtered.
 
 ```bash
-> /nodes &web-dir                # Show nodes with web directories (default limit 20)
-> /nodes &web-dir &top 50        # Show top 50 nodes with web directories
-> /nodes &web-dir &all           # Show all nodes with web directories
+> /nodes &stat=web-dirs              # Show nodes with web directories
+> /nodes &stat=routes &top 50        # Show top 50 nodes with routes
+> /nodes &stat=pip-calls &all        # Show all nodes with pip calls
+> /nodes &stat=web-dirs &stat=routes # Show nodes with both stats
 ```
 
-- Filters to nodes that have web directory files
+**Available stats** (auto-discovered):
+- `web-dirs` - Nodes with .py files containing WEB_DIRECTORY variable
+- `routes` - Nodes with .py files containing route-any decorator
+- `pip-calls` - Nodes with direct pip calls
+- Any custom stats added to `node-stats/` directory
+
+**Features:**
 - Can be combined with &top, &all, &save modifiers
-- Shows "Web: Yes" indicator in results
-
-### `&routes`
-Filter results to only include nodes with routes (nodes that have .py files with route-any decorator). Only works with `/nodes` command.
-
-```bash
-> /nodes &routes                 # Show nodes with routes (default limit 20)
-> /nodes &routes &top 50         # Show top 50 nodes with routes
-> /nodes &routes &all            # Show all nodes with routes
-```
-
-- Filters to nodes that have route files
-- Can be combined with &top, &all, &save modifiers
-- Shows "Routes: Yes" indicator in results
+- Multiple &stat= filters can be used together (nodes must match ALL filters)
+- Stat counts are shown in results (e.g., "Web Directories: 1 | Routes: 3")
 
 ### `&update-reqs`
 Fetch actual dependencies from requirements.txt files in repositories. Only works with `/nodes` command.
@@ -380,18 +377,12 @@ python analysis.py -e "//nodes kjnodes!"                      # Auto-select firs
 python analysis.py -e "//nodes &top 20 &update-reqs"
 ```
 
-### Filter nodes by web directories
+### Filter nodes by stats
 ```bash
-python analysis.py -e "//nodes &web-dir"                # Show all nodes with web directories
-python analysis.py -e "//nodes &web-dir &top 50"        # Show top 50 nodes with web directories
-python analysis.py -e "//nodes &web-dir &top 20 &save"  # Save results to file
-```
-
-### Filter nodes by routes
-```bash
-python analysis.py -e "//nodes &routes"                 # Show all nodes with routes
-python analysis.py -e "//nodes &routes &top 50"         # Show top 50 nodes with routes
-python analysis.py -e "//nodes &routes &all &save"      # Show and save all nodes with routes
+python analysis.py -e "//nodes &stat=web-dirs"              # Show all nodes with web directories
+python analysis.py -e "//nodes &stat=routes &top 50"        # Show top 50 nodes with routes
+python analysis.py -e "//nodes &stat=pip-calls &all &save"  # Show and save all nodes with pip calls
+python analysis.py -e "//nodes &stat=routes &stat=web-dirs" # Show nodes with both stats
 ```
 
 ### Interactive session workflow
@@ -405,8 +396,9 @@ $ python analysis.py
 > /nodes &top 10     # See top 10 nodes by downloads
 > /nodes comfyui-kjnodes  # View detailed deps for a specific node
 > /nodes kjnodes!    # Quick jump to first matching node
-> /nodes &web-dir &top 20  # Show top 20 nodes with web directories
-> /nodes &routes &top 10   # Show top 10 nodes with routes
+> /nodes &stat=web-dirs &top 20      # Show top 20 nodes with web directories
+> /nodes &stat=routes &top 10           # Show top 10 nodes with routes
+> /nodes &stat=routes &stat=pip-calls   # Show nodes with both routes and pip calls
 > /nodes comfyui-kjnodes &update-reqs  # Update deps from requirements.txt
 > /nodes &top 5 &update-reqs  # Update top 5 nodes with actual requirements
 > /graph cumulative  # View cumulative dependencies graph

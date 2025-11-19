@@ -248,8 +248,8 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         # Get all available stat names
         all_stat_names = sorted(get_all_stat_names(nodes_dict))
 
-        # Primary categorization stat (defaults to 'web-directories' if available)
-        primary_stat = 'web-directories' if 'web-directories' in all_stat_names else (all_stat_names[0] if all_stat_names else None)
+        # Primary categorization stat (defaults to 'web-dirs' if available)
+        primary_stat = 'web-dirs' if 'web-dirs' in all_stat_names else (all_stat_names[0] if all_stat_names else None)
 
         # Separate lists for nodes with and without the primary stat
         # Note: *_downloads lists contain y-axis values (downloads or deps based on metric)

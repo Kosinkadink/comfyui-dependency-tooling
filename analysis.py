@@ -1262,12 +1262,11 @@ def print_help():
     print("  &nodes - Filter by specific node IDs")
     print("         Comma-separated: &nodes id1,id2")
     print("         From file: &nodes file:nodelist.txt")
-    print("  &web-dir - Filter to nodes with web directories")
+    print("  &stat=<name> - Filter to nodes with a specific stat")
     print("         Works with /nodes command")
-    print("         Example: /nodes &web-dir &top 20")
-    print("  &routes - Filter to nodes with routes")
-    print("         Works with /nodes command")
-    print("         Example: /nodes &routes &top 20")
+    print("         Example: /nodes &stat=web-dirs &top 20")
+    print("         Example: /nodes &stat=routes &stat=pip-calls")
+    print("         Available stats auto-discovered from node-stats/ directory")
     print("  &update-reqs - Fetch actual dependencies from requirements.txt")
     print("         Works with /nodes command and node searches")
     print("         Example: /nodes &top 10 &update-reqs")
@@ -1678,14 +1677,8 @@ def interactive_mode(nodes_dict):
                     show_all = True
                     node_search = re.sub(r'&all', '', node_search, flags=re.IGNORECASE).strip()
 
-                if '&web-dir' in node_search.lower():
-                    web_dir_only = True
-                    node_search = re.sub(r'&web-dir', '', node_search, flags=re.IGNORECASE).strip()
-
-                routes_only = False
-                if '&routes' in node_search.lower():
-                    routes_only = True
-                    node_search = re.sub(r'&routes', '', node_search, flags=re.IGNORECASE).strip()
+                # Remove &stat= modifiers from search string (they're handled later in filtering)
+                node_search = re.sub(r'&stat=[^\s&]+', '', node_search, flags=re.IGNORECASE).strip()
 
                 if '&top' in node_search.lower():
                     top_match = re.search(r'&top\s+(-?\d+)', node_search.lower())
@@ -1821,19 +1814,14 @@ def interactive_mode(nodes_dict):
                             working_nodes = dict(sorted_nodes[top_n:])
                             print(f"\n[Filtering to bottom {abs(top_n)} nodes by downloads]")
 
-                # Filter by web directories if requested
-                if '&web-dir' in query.lower():
-                    web_dir_nodes = {node_id: node_data for node_id, node_data in working_nodes.items()
-                                    if node_data.get('_stats', {}).get('web-directories')}
-                    working_nodes = web_dir_nodes
-                    print(f"\n[Filtering to nodes with web directories: {len(working_nodes)} nodes]")
-
-                # Filter by routes if requested
-                if '&routes' in query.lower():
-                    routes_nodes = {node_id: node_data for node_id, node_data in working_nodes.items()
-                                   if node_data.get('_stats', {}).get('routes')}
-                    working_nodes = routes_nodes
-                    print(f"\n[Filtering to nodes with routes: {len(working_nodes)} nodes]")
+                # Filter by stat if requested (e.g., &stat=web-directories, &stat=routes)
+                stat_filters = re.findall(r'&stat=([^\s&]+)', query.lower())
+                for stat_filter in stat_filters:
+                    filtered_nodes = {node_id: node_data for node_id, node_data in working_nodes.items()
+                                     if node_data.get('_stats', {}).get(stat_filter)}
+                    working_nodes = filtered_nodes
+                    display_name = stat_filter.replace('-', ' ').replace('_', ' ').title()
+                    print(f"\n[Filtering to nodes with {display_name}: {len(working_nodes)} nodes]")
 
                 # Handle &update-reqs modifier
                 if '&update-reqs' in query.lower():
