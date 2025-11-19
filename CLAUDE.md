@@ -79,17 +79,22 @@ The codebase follows a **functional programming** style with no classes. All cod
    - Loads cached requirements.txt from `updated_reqs/` directory
    - Optionally loads CSV data (web directories, routes, pip usage)
 
-2. **Dependency Compilation** (`compile_dependencies()`):
+2. **Rank Storage** (`store_node_ranks()`):
+   - Calculates overall download ranks for all nodes (1-based)
+   - Stores rank in `_rank` field of each node
+   - Ensures graphs show actual overall ranks when using `&top` filter
+
+3. **Dependency Compilation** (`compile_dependencies()`):
    - Parses all dependencies from all nodes
    - Groups by base package name (ignoring version specifiers)
    - Separates regular dependencies, git dependencies, pip commands, and comments
    - Creates indices for fast lookup
 
-3. **Mode Selection**:
+4. **Mode Selection**:
    - **Interactive mode**: Command loop accepting user queries
    - **Execute mode**: Single command execution via `-e` flag
 
-4. **Command Processing**:
+5. **Command Processing**:
    - Commands start with `/` (e.g., `/summary`, `/list`, `/nodes`, `/update-reqs`)
    - Modifiers start with `&` (e.g., `&save`, `&top 100`, `&dupes`)
    - Direct searches match dependency names (e.g., `numpy`, `torch*`)
@@ -110,6 +115,7 @@ The codebase follows a **functional programming** style with no classes. All cod
       "createdAt": "2024-01-01T00:00:00Z",
       "dependencies": ["numpy>=1.20", "torch"]
     },
+    "_rank": 42,                 # Overall download rank (added by store_node_ranks())
     "_node_ids": ["NodeType1", "NodeType2"],  # Added by load_extension_node_map()
     "_has_node_pattern": True,  # If node count is dynamic
     "_web_directories": [...],   # Added by load_web_directory_data()

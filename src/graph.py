@@ -62,7 +62,7 @@ def calculate_cumulative_dependencies(nodes_dict):
     node_dep_counts = []
     unique_deps = set()
 
-    for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
+    for node_id, node_data in sorted_nodes:
         node_unique_deps = set()
 
         # Get dependencies for this node
@@ -81,7 +81,9 @@ def calculate_cumulative_dependencies(nodes_dict):
                             node_unique_deps.add(parsed['base_name'])
                             unique_deps.add(parsed['base_name'])
 
-        node_counts.append(i)
+        # Use stored overall rank instead of enumerated position
+        rank = node_data.get('_rank', len(node_counts) + 1)
+        node_counts.append(rank)
         cumulative_deps.append(len(unique_deps))
         node_names.append(f"{node_data.get('name', 'N/A')} ({node_id})")
         node_dep_counts.append(len(node_unique_deps))
@@ -277,7 +279,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         total_downloads = sum(node[1].get('downloads', 0) for node in sorted_nodes)
         running_total = 0
 
-        for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
+        for node_id, node_data in sorted_nodes:
             download_count = node_data.get('downloads', 0)
             dep_count = node_dep_counts.get(node_id, 0)
             individual_node_count = node_individual_counts.get(node_id, 0)
@@ -292,6 +294,9 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
 
             running_total += download_count
             cumulative_downloads.append(running_total)
+
+            # Use stored overall rank instead of enumerated position
+            rank = node_data.get('_rank', len(has_primary_ranks) + len(no_primary_ranks) + 1)
 
             # Collect all stat counts for this node dynamically
             node_stat_counts = {}
@@ -311,7 +316,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
 
             # Append to appropriate lists based on primary stat
             if has_primary_stat:
-                has_primary_ranks.append(i)
+                has_primary_ranks.append(rank)
                 has_primary_downloads.append(y_value)
                 has_primary_names.append(node_data.get('name', node_id))
                 has_primary_ids.append(node_id)
@@ -320,7 +325,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 has_primary_node_counts.append(node_count_str)
                 has_primary_stats.append(node_stat_counts)
             else:
-                no_primary_ranks.append(i)
+                no_primary_ranks.append(rank)
                 no_primary_downloads.append(y_value)
                 no_primary_names.append(node_data.get('name', node_id))
                 no_primary_ids.append(node_id)
@@ -563,7 +568,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             stat_node_counts = []
             stat_stats_list = []
 
-            for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
+            for node_id, node_data in sorted_nodes:
                 # Check if this node has the current stat
                 if node_data.get('_stats', {}).get(stat_name):
                     download_count = node_data.get('downloads', 0)
@@ -578,6 +583,9 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     else:
                         y_value = download_count
 
+                    # Use stored overall rank instead of enumerated position
+                    rank = node_data.get('_rank', len(stat_ranks) + 1)
+
                     # Collect all stat counts for this node
                     node_stat_counts = {}
                     for s_name in all_stat_names:
@@ -589,7 +597,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     has_node_pattern = node_data.get('_has_node_pattern', False)
                     node_count_str = f"{individual_node_count}*" if has_node_pattern else str(individual_node_count)
 
-                    stat_ranks.append(i)
+                    stat_ranks.append(rank)
                     stat_y_values.append(y_value)
                     stat_names.append(node_data.get('name', node_id))
                     stat_ids.append(node_id)

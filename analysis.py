@@ -511,6 +511,22 @@ def calculate_node_ranks(nodes_dict):
     return rank_map
 
 
+def store_node_ranks(nodes_dict):
+    """
+    Calculate and store download ranks in each node's data structure.
+    This allows graphs to show actual overall ranks even when filtering with &top.
+
+    Args:
+        nodes_dict: Dictionary of nodes (modified in-place)
+    """
+    # Sort all nodes by downloads
+    sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+
+    # Store rank in each node
+    for rank, (node_id, node_data) in enumerate(sorted_nodes, 1):
+        node_data['_rank'] = rank
+
+
 def analyze_specific_dependency(nodes_dict, dep_name):
     """
     Analyze a specific dependency across all nodes.
@@ -1463,6 +1479,9 @@ def interactive_mode(nodes_dict):
 
                         # Reload the nodes dictionary with the updated data
                         nodes_dict = load_nodes_to_dict()
+
+                        # Store overall ranks in node data for accurate graph display
+                        store_node_ranks(nodes_dict)
 
                         # Reload all data sources
                         load_all_node_stats(nodes_dict, 'node-stats')
@@ -2485,6 +2504,9 @@ def main():
         except Exception as e:
             print(f"Error fetching nodes from registry: {e}")
             return
+
+    # Store overall ranks in node data for accurate graph display
+    store_node_ranks(nodes_dict)
 
     if args.execute:
         # Execute the command in a modified interactive mode
