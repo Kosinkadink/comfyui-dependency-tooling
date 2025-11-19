@@ -195,7 +195,7 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph c
         return False
 
 
-def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False, full_nodes_for_percentiles=None, metric='downloads', hide_markers=None):
+def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False, full_nodes_for_percentiles=None, metric='downloads', hide_markers=None, stat_name=None):
     """
     Create and display a graph showing downloads or dependency counts using plotly.
 
@@ -206,8 +206,9 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         log_scale: Whether to use logarithmic scale for y-axis (downloads only)
         show_indicators: Whether to show percentage milestone indicators (downloads only)
         full_nodes_for_percentiles: Full dataset for calculating percentiles (when using &top filter, downloads only)
-        metric: 'downloads' or 'deps' - which metric to display on y-axis
+        metric: 'downloads', 'deps', 'nodes', or 'stat' - which metric to display on y-axis
         hide_markers: List of stat names to hide markers for (e.g., ['missing-nodes', 'web-dirs'])
+        stat_name: Name of stat to display when metric='stat' (e.g., 'missing-nodes')
 
     Returns:
         True if successful, False otherwise
@@ -221,6 +222,9 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             print("Creating dependency count graph...")
         elif metric == 'nodes':
             print("Creating node count graph...")
+        elif metric == 'stat':
+            stat_display = stat_name.replace('-', ' ').replace('_', ' ').title() if stat_name else 'Stat'
+            print(f"Creating {stat_display} count graph...")
         else:
             print("Creating downloads graph...")
 
@@ -244,6 +248,13 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         for node_id, node_data in nodes_dict.items():
             node_ids = node_data.get('_node_ids', [])
             node_individual_counts[node_id] = len(node_ids) if node_ids else 0
+
+        # Calculate stat counts for all nodes (needed if metric='stat')
+        node_stat_counts_metric = {}
+        if metric == 'stat' and stat_name:
+            for node_id, node_data in nodes_dict.items():
+                stat_data = node_data.get('_stats', {}).get(stat_name, [])
+                node_stat_counts_metric[node_id] = len(stat_data) if stat_data else 0
 
         # Always sort nodes by downloads (popularity ranking)
         sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
@@ -290,6 +301,8 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 y_value = dep_count
             elif metric == 'nodes':
                 y_value = individual_node_count
+            elif metric == 'stat':
+                y_value = node_stat_counts_metric.get(node_id, 0)
             else:
                 y_value = download_count
 
@@ -555,12 +568,15 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             {'symbol': 'triangle-right', 'color': '#c2185b', 'line_color': '#ad1457'}, # Pink triangle right
         ]
 
-        # Get stats to show as overlays (exclude primary stat and hidden markers)
-        hide_markers_normalized = [m.lower() for m in (hide_markers or [])]
-        overlay_stats = [stat for stat in all_stat_names
-                        if stat != primary_stat and stat not in hide_markers_normalized]
+        # Get all overlay stats (exclude primary stat) - for statistics display
+        all_overlay_stats = [stat for stat in all_stat_names if stat != primary_stat]
 
-        for idx, stat_name in enumerate(overlay_stats):
+        # Get stats to show as markers (exclude primary stat and hidden markers)
+        hide_markers_normalized = [m.lower() for m in (hide_markers or [])]
+        overlay_stats_for_markers = [stat for stat in all_stat_names
+                                     if stat != primary_stat and stat not in hide_markers_normalized]
+
+        for idx, stat_name in enumerate(overlay_stats_for_markers):
             # Collect nodes that have this stat
             stat_ranks = []
             stat_y_values = []
@@ -583,6 +599,8 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                         y_value = dep_count
                     elif metric == 'nodes':
                         y_value = individual_node_count
+                    elif metric == 'stat':
+                        y_value = node_stat_counts_metric.get(node_id, 0)
                     else:
                         y_value = download_count
 
@@ -654,6 +672,11 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             title = build_graph_title('Individual Node Count by Node Pack Rank', query_desc)
             xaxis_title = 'Node Pack Rank (sorted by popularity)'
             yaxis_title = 'Number of Individual Nodes'
+        elif metric == 'stat' and stat_name:
+            stat_display = stat_name.replace('-', ' ').replace('_', ' ').title()
+            title = build_graph_title(f'{stat_display} Count by Node Rank', query_desc)
+            xaxis_title = 'Node Rank (sorted by popularity)'
+            yaxis_title = f'Number of {stat_display} Entries'
         else:
             title = build_graph_title('Total Downloads by Node Rank', query_desc)
             xaxis_title = 'Node Rank (sorted by popularity)'
@@ -756,11 +779,13 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         print(f"  Nodes with {primary_label}: {has_primary_count:,} ({has_primary_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
         print(f"  Nodes without {primary_label}: {no_primary_count:,} ({no_primary_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
 
-        # Show counts for overlay stats
-        for stat_name in overlay_stats:
+        # Show counts for all overlay stats (including hidden markers)
+        for stat_name in all_overlay_stats:
             stat_count = sum(1 for node in sorted_nodes if node[1].get('_stats', {}).get(stat_name))
+            no_stat_count = total_nodes - stat_count
             display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
             print(f"  Nodes with {display_name}: {stat_count:,} ({stat_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
+            print(f"  Nodes without {display_name}: {no_stat_count:,} ({no_stat_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
 
         print(f"  Nodes with zero dependencies: {zero_deps_count:,} ({zero_deps_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
 

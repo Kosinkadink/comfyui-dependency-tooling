@@ -1522,6 +1522,9 @@ def print_help():
     print("  /graph downloads log indicators - Log scale with percentage milestones")
     print("  /graph deps - Create dependency count visualization")
     print("  /graph nodes - Create individual node count visualization")
+    print("  /graph data=<stat> - Create custom stat count visualization")
+    print("         Example: /graph data=missing-nodes")
+    print("         Example: /graph data=web-dirs &top 50")
     print("  /summary - Show overall dependency analysis summary")
     print("  /help  - Show this help message")
     print("  /quit  - Exit interactive mode")
@@ -1735,10 +1738,16 @@ def interactive_mode(nodes_dict):
 
                 # Check graph type
                 graph_type = None
+                stat_name = None
                 use_log_scale = False
                 show_indicators = False
 
-                if 'cumulative' in query_words:
+                # Check for data=<stat_name> pattern
+                data_match = re.search(r'data=([^\s&]+)', query.lower())
+                if data_match:
+                    stat_name = data_match.group(1)
+                    graph_type = 'stat'
+                elif 'cumulative' in query_words:
                     graph_type = 'dependencies'
                 elif 'downloads' in query_words:
                     graph_type = 'downloads'
@@ -1753,12 +1762,13 @@ def interactive_mode(nodes_dict):
                 elif 'nodes' in query_words:
                     graph_type = 'nodes'
                 else:
-                    print("Error: Unknown graph type. Use 'cumulative', 'downloads', 'deps', or 'nodes'")
+                    print("Error: Unknown graph type. Use 'cumulative', 'downloads', 'deps', 'nodes', or 'data=<stat>'")
                     print("Usage:")
                     print("  /graph cumulative - Cumulative dependencies graph")
                     print("  /graph downloads - Downloads graph")
                     print("  /graph deps - Dependency count graph")
                     print("  /graph nodes - Individual node count graph")
+                    print("  /graph data=<stat> - Custom stat count graph (e.g., data=missing-nodes)")
                     continue
 
                 # Parse all modifiers using centralized function
@@ -1793,6 +1803,8 @@ def interactive_mode(nodes_dict):
                     create_deps_graph(working_nodes, save_to_file=save_results, query_desc=original_query, full_nodes_for_percentiles=full_nodes_for_percentiles, hide_markers=hide_markers)
                 elif graph_type == 'nodes':
                     create_nodes_graph(working_nodes, save_to_file=save_results, query_desc=original_query, full_nodes_for_percentiles=full_nodes_for_percentiles, hide_markers=hide_markers)
+                elif graph_type == 'stat':
+                    create_downloads_graph(working_nodes, save_to_file=save_results, query_desc=original_query, full_nodes_for_percentiles=full_nodes_for_percentiles, hide_markers=hide_markers, metric='stat', stat_name=stat_name)
                 else:
                     create_cumulative_graph(working_nodes, save_to_file=save_results, query_desc=original_query)
 

@@ -99,7 +99,9 @@ The codebase follows a **functional programming** style with no classes. All cod
 
 5. **Command Processing**:
    - Commands start with `/` (e.g., `/summary`, `/list`, `/nodes`, `/update-reqs`)
-   - Modifiers start with `&` (e.g., `&save`, `&top 100`, `&dupes`)
+   - Graph commands: `/graph downloads`, `/graph deps`, `/graph nodes`, `/graph data=<stat>`
+   - Custom stat graphs: `/graph data=missing-nodes` displays stat count on y-axis
+   - Modifiers start with `&` (e.g., `&save`, `&top 100`, `&dupes`, `&hide-markers`)
    - Direct searches match dependency names (e.g., `numpy`, `torch*`)
 
 ### Key Data Structures
