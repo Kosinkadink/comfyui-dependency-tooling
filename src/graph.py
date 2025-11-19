@@ -250,6 +250,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
 
         # Primary categorization stat (defaults to 'web-dirs' if available)
         primary_stat = 'web-dirs' if 'web-dirs' in all_stat_names else (all_stat_names[0] if all_stat_names else None)
+        primary_label = primary_stat.replace('-', ' ').replace('_', ' ').title() if primary_stat else "Primary"
 
         # Separate lists for nodes with and without the primary stat
         # Note: *_downloads lists contain y-axis values (downloads or deps based on metric)
@@ -411,7 +412,6 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 for i in zero_no_primary_indices
             ]
 
-            primary_label = primary_stat.replace('-', ' ').replace('_', ' ').title() if primary_stat else "Primary"
             fig.add_trace(go.Scatter(
                 x=zero_no_primary_ranks,
                 y=[0] * len(zero_no_primary_ranks),  # Position at y=0
@@ -524,6 +524,116 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 hovertemplate=hover_template
             ))
 
+        # Add visual indicators for each stat (excluding primary stat)
+        # These are added LAST so they appear on top of the bars
+        stat_marker_styles = [
+            {'symbol': 'star', 'color': '#e74c3c', 'line_color': '#c0392b'},           # Red star
+            {'symbol': 'diamond', 'color': '#f39c12', 'line_color': '#d68910'},        # Orange diamond
+            {'symbol': 'triangle-up', 'color': '#9b59b6', 'line_color': '#8e44ad'},    # Purple triangle
+            {'symbol': 'square', 'color': '#1abc9c', 'line_color': '#16a085'},         # Teal square
+            {'symbol': 'circle', 'color': '#e91e63', 'line_color': '#c2185b'},         # Pink circle
+            {'symbol': 'cross', 'color': '#ff5722', 'line_color': '#e64a19'},          # Deep orange cross
+            {'symbol': 'x', 'color': '#00bcd4', 'line_color': '#0097a7'},              # Cyan x
+            {'symbol': 'pentagon', 'color': '#795548', 'line_color': '#5d4037'},       # Brown pentagon
+            {'symbol': 'hexagon', 'color': '#4caf50', 'line_color': '#388e3c'},        # Green hexagon
+            {'symbol': 'star-triangle-up', 'color': '#ff9800', 'line_color': '#f57c00'}, # Orange star-triangle
+            {'symbol': 'triangle-down', 'color': '#673ab7', 'line_color': '#512da8'},  # Deep purple triangle down
+            {'symbol': 'diamond-tall', 'color': '#009688', 'line_color': '#00796b'},   # Teal diamond tall
+            {'symbol': 'hourglass', 'color': '#f44336', 'line_color': '#d32f2f'},      # Red hourglass
+            {'symbol': 'bowtie', 'color': '#3f51b5', 'line_color': '#303f9f'},         # Indigo bowtie
+            {'symbol': 'asterisk', 'color': '#cddc39', 'line_color': '#afb42b'},       # Lime asterisk
+            {'symbol': 'hash', 'color': '#ff6f00', 'line_color': '#e65100'},           # Orange hash
+            {'symbol': 'y-up', 'color': '#006064', 'line_color': '#004d40'},           # Dark cyan y-up
+            {'symbol': 'y-down', 'color': '#bf360c', 'line_color': '#dd2c00'},         # Deep orange y-down
+            {'symbol': 'triangle-left', 'color': '#1976d2', 'line_color': '#1565c0'},  # Blue triangle left
+            {'symbol': 'triangle-right', 'color': '#c2185b', 'line_color': '#ad1457'}, # Pink triangle right
+        ]
+
+        # Get stats to show as overlays (exclude primary stat)
+        overlay_stats = [stat for stat in all_stat_names if stat != primary_stat]
+
+        for idx, stat_name in enumerate(overlay_stats):
+            # Collect nodes that have this stat
+            stat_ranks = []
+            stat_y_values = []
+            stat_names = []
+            stat_ids = []
+            stat_dep_counts = []
+            stat_download_counts = []
+            stat_node_counts = []
+            stat_stats_list = []
+
+            for i, (node_id, node_data) in enumerate(sorted_nodes, 1):
+                # Check if this node has the current stat
+                if node_data.get('_stats', {}).get(stat_name):
+                    download_count = node_data.get('downloads', 0)
+                    dep_count = node_dep_counts.get(node_id, 0)
+                    individual_node_count = node_individual_counts.get(node_id, 0)
+
+                    # Use the appropriate metric for y-axis values
+                    if metric == 'deps':
+                        y_value = dep_count
+                    elif metric == 'nodes':
+                        y_value = individual_node_count
+                    else:
+                        y_value = download_count
+
+                    # Collect all stat counts for this node
+                    node_stat_counts = {}
+                    for s_name in all_stat_names:
+                        node_stat_counts[s_name] = get_node_stat_count(node_data, s_name)
+
+                    # Get individual nodes count
+                    node_ids = node_data.get('_node_ids', [])
+                    individual_node_count = len(node_ids) if node_ids else 0
+                    has_node_pattern = node_data.get('_has_node_pattern', False)
+                    node_count_str = f"{individual_node_count}*" if has_node_pattern else str(individual_node_count)
+
+                    stat_ranks.append(i)
+                    stat_y_values.append(y_value)
+                    stat_names.append(node_data.get('name', node_id))
+                    stat_ids.append(node_id)
+                    stat_dep_counts.append(dep_count)
+                    stat_download_counts.append(download_count)
+                    stat_node_counts.append(node_count_str)
+                    stat_stats_list.append(node_stat_counts)
+
+            # Add overlay trace if there are nodes with this stat
+            if stat_ranks:
+                # Build customdata for this overlay
+                overlay_customdata = [
+                    build_customdata(
+                        stat_ids[i],
+                        stat_download_counts[i],
+                        stat_dep_counts[i],
+                        stat_node_counts[i],
+                        stat_stats_list[i]
+                    )
+                    for i in range(len(stat_ranks))
+                ]
+
+                # Get marker style (cycle through available styles)
+                marker_style = stat_marker_styles[idx % len(stat_marker_styles)]
+
+                # Format stat name for display
+                display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
+
+                fig.add_trace(go.Scatter(
+                    x=stat_ranks,
+                    y=stat_y_values,
+                    mode='markers',
+                    name=f'Has {display_name}',
+                    marker=dict(
+                        symbol=marker_style['symbol'],
+                        size=8,
+                        color=marker_style['color'],
+                        line=dict(width=1, color=marker_style['line_color'])
+                    ),
+                    customdata=overlay_customdata,
+                    hovertemplate=hover_template,
+                    text=stat_names
+                ))
+
         # Build title and axis labels based on metric
         if metric == 'deps':
             title = build_graph_title('Dependency Count by Node Rank', query_desc)
@@ -626,18 +736,21 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         total_nodes = len(sorted_nodes)
         total_downloads_sum = sum(node[1].get('downloads', 0) for node in sorted_nodes)
         total_deps_sum = sum(node_dep_counts.get(node[0], 0) for node in sorted_nodes)
-        web_dir_count = len(web_dir_ranks)
-        no_web_dir_count = len(no_web_dir_ranks)
-        routes_count = len(routes_ranks)
-        pip_nonos_count = len(pip_nonos_ranks)
+        has_primary_count = len(has_primary_ranks)
+        no_primary_count = len(no_primary_ranks)
         zero_deps_count = sum(1 for node in sorted_nodes if node_dep_counts.get(node[0], 0) == 0)
 
         print(f"\nStatistics:")
         print(f"  Total nodes: {total_nodes:,}")
-        print(f"  Nodes with web directories: {web_dir_count:,} ({web_dir_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
-        print(f"  Nodes without web directories: {no_web_dir_count:,} ({no_web_dir_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
-        print(f"  Nodes with routes: {routes_count:,} ({routes_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
-        print(f"  Nodes with pip calls: {pip_nonos_count:,} ({pip_nonos_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
+        print(f"  Nodes with {primary_label}: {has_primary_count:,} ({has_primary_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
+        print(f"  Nodes without {primary_label}: {no_primary_count:,} ({no_primary_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
+
+        # Show counts for overlay stats
+        for stat_name in overlay_stats:
+            stat_count = sum(1 for node in sorted_nodes if node[1].get('_stats', {}).get(stat_name))
+            display_name = stat_name.replace('-', ' ').replace('_', ' ').title()
+            print(f"  Nodes with {display_name}: {stat_count:,} ({stat_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
+
         print(f"  Nodes with zero dependencies: {zero_deps_count:,} ({zero_deps_count * 100 // total_nodes if total_nodes > 0 else 0}%)")
 
         if metric == 'deps':
