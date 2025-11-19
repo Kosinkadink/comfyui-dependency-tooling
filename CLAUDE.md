@@ -151,6 +151,7 @@ Modifiers filter or modify command behavior. They are parsed using regex pattern
 - `&nodes file:path.txt` - Filter to specific node IDs from file or comma-separated list
 - `&stat <name>` - Filter to nodes with specific stats (e.g., `&stat web-dirs`, `&stat routes`)
 - `&hide-markers <name,name>` - Hide specific stat markers in graphs (e.g., `&hide-markers missing-nodes,routes`)
+- `&sort <stat>` - Sort graphs by stat count instead of download rank (e.g., `&sort missing-nodes`)
 
 ### Registry API Integration
 

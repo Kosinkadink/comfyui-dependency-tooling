@@ -195,7 +195,7 @@ def create_cumulative_graph(nodes_dict, save_to_file=False, query_desc="/graph c
         return False
 
 
-def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False, full_nodes_for_percentiles=None, metric='downloads', hide_markers=None, stat_name=None):
+def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph downloads", log_scale=False, show_indicators=False, full_nodes_for_percentiles=None, metric='downloads', hide_markers=None, stat_name=None, sort_stat=None):
     """
     Create and display a graph showing downloads or dependency counts using plotly.
 
@@ -209,6 +209,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         metric: 'downloads', 'deps', 'nodes', or 'stat' - which metric to display on y-axis
         hide_markers: List of stat names to hide markers for (e.g., ['missing-nodes', 'web-dirs'])
         stat_name: Name of stat to display when metric='stat' (e.g., 'missing-nodes')
+        sort_stat: Name of stat to sort by instead of downloads (e.g., 'missing-nodes')
 
     Returns:
         True if successful, False otherwise
@@ -256,8 +257,20 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                 stat_data = node_data.get('_stats', {}).get(stat_name, [])
                 node_stat_counts_metric[node_id] = len(stat_data) if stat_data else 0
 
-        # Always sort nodes by downloads (popularity ranking)
-        sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
+        # Calculate sort stat counts if sorting by a specific stat
+        node_sort_stat_counts = {}
+        if sort_stat:
+            for node_id, node_data in nodes_dict.items():
+                stat_data = node_data.get('_stats', {}).get(sort_stat, [])
+                node_sort_stat_counts[node_id] = len(stat_data) if stat_data else 0
+
+        # Sort nodes by the specified stat or by downloads (default)
+        if sort_stat:
+            sorted_nodes = sorted(nodes_dict.items(),
+                                 key=lambda x: node_sort_stat_counts.get(x[0], 0),
+                                 reverse=True)
+        else:
+            sorted_nodes = sorted(nodes_dict.items(), key=lambda x: x[1].get('downloads', 0), reverse=True)
 
         # Get all available stat names
         all_stat_names = sorted(get_all_stat_names(nodes_dict))
@@ -291,7 +304,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         total_downloads = sum(node[1].get('downloads', 0) for node in sorted_nodes)
         running_total = 0
 
-        for node_id, node_data in sorted_nodes:
+        for idx, (node_id, node_data) in enumerate(sorted_nodes, 1):
             download_count = node_data.get('downloads', 0)
             dep_count = node_dep_counts.get(node_id, 0)
             individual_node_count = node_individual_counts.get(node_id, 0)
@@ -309,8 +322,11 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             running_total += download_count
             cumulative_downloads.append(running_total)
 
-            # Use stored overall rank instead of enumerated position
-            rank = node_data.get('_rank', len(has_primary_ranks) + len(no_primary_ranks) + 1)
+            # Use sequential position if custom sorting, otherwise use stored download rank
+            if sort_stat:
+                rank = idx  # Sequential position based on custom sort
+            else:
+                rank = node_data.get('_rank', idx)  # Original download rank
 
             # Collect all stat counts for this node dynamically
             node_stat_counts = {}
@@ -587,7 +603,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             stat_node_counts = []
             stat_stats_list = []
 
-            for node_id, node_data in sorted_nodes:
+            for position, (node_id, node_data) in enumerate(sorted_nodes, 1):
                 # Check if this node has the current stat
                 if node_data.get('_stats', {}).get(stat_name):
                     download_count = node_data.get('downloads', 0)
@@ -604,8 +620,11 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
                     else:
                         y_value = download_count
 
-                    # Use stored overall rank instead of enumerated position
-                    rank = node_data.get('_rank', len(stat_ranks) + 1)
+                    # Use sequential position if custom sorting, otherwise use stored download rank
+                    if sort_stat:
+                        rank = position  # Sequential position based on custom sort
+                    else:
+                        rank = node_data.get('_rank', position)  # Original download rank
 
                     # Collect all stat counts for this node
                     node_stat_counts = {}
@@ -681,6 +700,11 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
             title = build_graph_title('Total Downloads by Node Rank', query_desc)
             xaxis_title = 'Node Rank (sorted by popularity)'
             yaxis_title = 'Total Downloads' + (' (log scale)' if log_scale else '')
+
+        # Update x-axis title if custom sorting is applied
+        if sort_stat:
+            sort_display = sort_stat.replace('-', ' ').replace('_', ' ').title()
+            xaxis_title = f'Position (sorted by {sort_display} count)'
 
         # Update layout
         layout_params = {
@@ -839,7 +863,7 @@ def create_downloads_graph(nodes_dict, save_to_file=False, query_desc="/graph do
         return False
 
 
-def create_deps_graph(nodes_dict, save_to_file=False, query_desc="/graph deps", full_nodes_for_percentiles=None, hide_markers=None):
+def create_deps_graph(nodes_dict, save_to_file=False, query_desc="/graph deps", full_nodes_for_percentiles=None, hide_markers=None, sort_stat=None):
     """
     Create and display a dependency count graph using plotly.
     This is a convenience wrapper around create_downloads_graph() with metric='deps'.
@@ -850,6 +874,7 @@ def create_deps_graph(nodes_dict, save_to_file=False, query_desc="/graph deps", 
         query_desc: Query description for file naming and title
         full_nodes_for_percentiles: Full dataset for calculating percentiles (when using &top filter)
         hide_markers: List of stat names to hide markers for
+        sort_stat: Name of stat to sort by instead of downloads
 
     Returns:
         True if successful, False otherwise
@@ -862,11 +887,12 @@ def create_deps_graph(nodes_dict, save_to_file=False, query_desc="/graph deps", 
         show_indicators=False,
         full_nodes_for_percentiles=full_nodes_for_percentiles,
         metric='deps',
-        hide_markers=hide_markers
+        hide_markers=hide_markers,
+        sort_stat=sort_stat
     )
 
 
-def create_nodes_graph(nodes_dict, save_to_file=False, query_desc="/graph nodes", full_nodes_for_percentiles=None, hide_markers=None):
+def create_nodes_graph(nodes_dict, save_to_file=False, query_desc="/graph nodes", full_nodes_for_percentiles=None, hide_markers=None, sort_stat=None):
     """
     Create and display an individual node count graph using plotly.
     This is a convenience wrapper around create_downloads_graph() with metric='nodes'.
@@ -877,6 +903,7 @@ def create_nodes_graph(nodes_dict, save_to_file=False, query_desc="/graph nodes"
         query_desc: Query description for file naming and title
         full_nodes_for_percentiles: Full dataset for calculating percentiles (when using &top filter)
         hide_markers: List of stat names to hide markers for
+        sort_stat: Name of stat to sort by instead of downloads
 
     Returns:
         True if successful, False otherwise
@@ -889,5 +916,6 @@ def create_nodes_graph(nodes_dict, save_to_file=False, query_desc="/graph nodes"
         show_indicators=False,
         full_nodes_for_percentiles=full_nodes_for_percentiles,
         metric='nodes',
-        hide_markers=hide_markers
+        hide_markers=hide_markers,
+        sort_stat=sort_stat
     )
