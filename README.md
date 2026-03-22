@@ -25,7 +25,9 @@ Launch with `python -m dep_tui`. Navigate between screens with global keybinding
 | `n` | Node List | Sortable table of all node packs |
 | `d` | Dependencies | Searchable dependency list |
 | `s` | Summary | Dashboard with ecosystem stats and top deps |
+| `g` | Graph | Interactive charts with cursor navigation |
 | `u` | Update | Fetch fresh data from the registry |
+| `r` | Update Reqs | Fetch requirements.txt from GitHub |
 | `q` | Quit | Exit the TUI |
 
 ### Node List (`n`)
@@ -49,6 +51,18 @@ Browse and search all dependencies in the ecosystem.
 ### Summary (`s`)
 
 Dashboard showing total node count, dependency statistics, and top dependencies at a glance.
+
+### Graph (`g`)
+
+Interactive in-terminal charts powered by plotext.
+
+- `1`–`4` — Switch chart type: Downloads, Dep Count, Top Deps, Cumulative
+- `j` / `k` — Move cursor left/right through data points
+- `+` / `-` — Adjust number of items displayed
+- `l` — Toggle log scale
+- `Enter` — Open detail view for the highlighted item
+- Click — Highlight a bar; double-click to open detail view
+- Mouse hover — Shows item info in the top bar
 
 ## CLI Usage
 
@@ -143,3 +157,4 @@ Node data is cached in `.cache/` after the first fetch from the ComfyUI registry
 - Python 3.10+
 - `requests` — registry API access
 - `textual` — TUI framework (for `python -m dep_tui`)
+- `textual-plotext` — Terminal plotting for the Graph screen
