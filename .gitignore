@@ -1,7 +1,5 @@
 results/*
 missing-nodes/*
-# manager-files/*
-# updated_reqs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -210,4 +208,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-manager-files/nodes.json
+

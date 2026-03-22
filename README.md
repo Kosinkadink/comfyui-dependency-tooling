@@ -1,486 +1,145 @@
 # ComfyUI Dependency Analysis Tool
 
-A Python tool for analyzing dependencies across ComfyUI node packages. This tool helps identify common dependencies, version conflicts, and provides detailed insights into the ComfyUI ecosystem's dependency landscape.
+Analyze dependencies across the ComfyUI node ecosystem — find common packages, version conflicts, and usage patterns across thousands of custom node packs.
 
-NOTE: Since it is a bit of busy work, almost everything related to this tool is Claude Code generated; this sentence is one of the only things I (Kosinkadink) wrote here (hi!).
-
-## Table of Contents
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Usage Modes](#usage-modes)
-- [Commands](#commands)
-- [Search Modifiers](#search-modifiers)
-- [Examples](#examples)
-- [Output Files](#output-files)
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/comfyui-dependency-tooling.git
-cd comfyui-dependency-tooling
-
-# No additional dependencies required - uses Python standard library
-python analysis.py
-```
+NOTE: Since it is a bit of busy work, almost everything related to this tool is AI generated; this sentence is one of the only things I (Kosinkadink) wrote here (hi!).
 
 ## Quick Start
 
 ```bash
-# Launch interactive mode (default)
-python analysis.py
+pip install -r requirements.txt
 
-# Execute a single command
-python analysis.py -e "numpy"
+# Interactive TUI (primary interface)
+python -m dep_tui
 
-# Search with modifiers
-python analysis.py -e "torch* &top 100"
+# CLI one-shot mode (scripting)
+python analysis.py -e "/summary"
 ```
 
-## Usage Modes
+## TUI Usage
 
-### Interactive Mode (Default)
-When you run `analysis.py` without arguments, it launches an interactive session where you can explore dependencies, search for packages, and analyze nodes.
+Launch with `python -m dep_tui`. Navigate between screens with global keybindings:
+
+| Key | Screen | Description |
+|-----|--------|-------------|
+| `n` | Node List | Sortable table of all node packs |
+| `d` | Dependencies | Searchable dependency list |
+| `s` | Summary | Dashboard with ecosystem stats and top deps |
+| `u` | Update | Fetch fresh data from the registry |
+| `q` | Quit | Exit the TUI |
+
+### Node List (`n`)
+
+Sortable, searchable table of node packs ranked by downloads.
+
+- `/` — Search by name
+- `f` — Set top-N filter (enter a number like `50`, `-10`, or `10:20`)
+- `t` — Toggle stat filter (`+web-dirs` to include, `-pip-calls` to exclude)
+- `c` — Clear all filters
+- `Enter` — Open node detail view
+
+### Dependencies (`d`)
+
+Browse and search all dependencies in the ecosystem.
+
+- `/` — Search by dependency name
+- `v` — Toggle showing only duplicated (version-conflict) deps
+- `Enter` — Open dependency detail view
+
+### Summary (`s`)
+
+Dashboard showing total node count, dependency statistics, and top dependencies at a glance.
+
+## CLI Usage
+
+Run a single command and exit with `-e`:
 
 ```bash
-python analysis.py
+python analysis.py -e "/command"
 ```
 
-### Execute Mode
-Run a single command and exit. Useful for scripting or quick queries.
+> **Git Bash note:** Use `//command` (double slash) to prevent path interpretation.
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/summary` | Ecosystem overview — node counts, top deps, warnings |
+| `/list` | All unique dependencies (alphabetical, with usage counts) |
+| `/top` | Top 20 most common dependencies |
+| `/nodes` | Node list sorted by downloads; add a name to view details |
+| `/update` | Fetch latest data from the ComfyUI registry |
+| `/update-reqs` | Fetch actual deps from GitHub requirements.txt files |
+
+### Filter Modifiers
+
+| Modifier | Effect |
+|----------|--------|
+| `&top N` | Limit to top N nodes by downloads (negative = bottom N) |
+| `&nodes id1,id2` | Filter to specific node IDs (or `&nodes file:list.txt`) |
+| `&stat name` | Filter to nodes with a given stat (stackable) |
+| `&!stat name` | Exclude nodes with a given stat |
+
+### Display Modifiers
+
+| Modifier | Effect |
+|----------|--------|
+| `&save` | Save results to `results/` with timestamp |
+| `&all` | Show all results (no truncation) |
+| `&dupes` | Show only deps with version conflicts (`/list` only) |
+| `&sort` | Change sort order |
+
+### Examples
 
 ```bash
-python analysis.py --execute "command"
-# or
-python analysis.py -e "command"
-```
+# Summary of the whole ecosystem
+python analysis.py -e "/summary"
 
-**Note for Git Bash users:** When using commands that start with `/`, use double slashes (e.g., `//top` instead of `/top`) to prevent path interpretation.
+# Dependencies with version conflicts in top 100 nodes
+python analysis.py -e "//list &dupes &top 100"
 
-## Commands
+# Search for torch-related packages
+python analysis.py -e "torch* &all &save"
 
-### `/summary`
-Display a comprehensive analysis summary including:
-- Total nodes analyzed
-- Nodes with/without dependencies
-- Most common dependencies
-- Example nodes with their dependencies
-- Warnings about commented dependencies
-- Information about pip commands
-
-```bash
-> /summary
-```
-
-### `/list`
-Show all unique dependency names in the dataset.
-- Dependencies are grouped by base package name (versions consolidated)
-- Shows count of nodes using each dependency
-- Displays in alphabetical order
-
-```bash
-> /list
-> /list &dupes       # Show dependencies with version conflicts
-> /list &top 50      # Show dependencies in top 50 nodes
-> /list &top -10     # Show dependencies in bottom 10 nodes
-```
-
-### `/top`
-Display the 20 most common dependencies across all nodes.
-
-```bash
-> /top
-> /top &top 100      # Show most common deps in top 100 nodes
-```
-
-### `/nodes`
-Show detailed information about nodes, sorted by downloads.
-- Displays rank, downloads, stars, and dependency count
-- Shows latest version and release date
-- Includes repository URL and description
-
-**List nodes:**
-```bash
-> /nodes              # Show top 20 nodes
-> /nodes &all         # Show all nodes
-> /nodes &top 50      # Show top 50 nodes
-> /nodes &top -5      # Show bottom 5 nodes
-```
-
-**View specific node details:**
-```bash
-> /nodes comfyui-kjnodes          # Show detailed dependency info for a specific node
-> /nodes comfy                    # Fuzzy search - shows matching nodes
-> /nodes comfy!                   # Auto-select first match (no list)
-> /nodes kjnodes!                 # Quickly jump to first matching node
-```
-
-When you specify a node ID after `/nodes`, it displays:
-- Node metadata (name, rank, downloads, stars, repository)
-- Latest version and release date
-- Complete list of active dependencies
-- Git-based dependencies (if any)
-- Pip command flags (if any)
-- Commented-out dependencies (if any)
-
-**Quick match with `!`:**
-Add `!` to the end of your search to automatically select the first matching node instead of showing a list. The search will try exact match first, then "starts with", then "contains". The first match by downloads is selected.
-
-**Update dependencies from requirements.txt:**
-
-The node registry data may have incomplete or outdated dependency information. Use the `/update-reqs` command to fetch actual dependencies from the repository's requirements.txt file:
-
-```bash
-> /update-reqs &nodes comfyui-kjnodes   # Update single node
-> /update-reqs &top 10                  # Update top 10 nodes
-> /update-reqs                          # Update all nodes (may take a while!)
-```
-
-- Fetches requirements.txt from GitHub repositories
-- Updates dependencies in-place for analysis
-- Original dependencies from nodes.json are backed up
-- Works with all modifiers (&top, &nodes, &stat, etc.)
-- Updated dependencies persist for the current session
-
-### `/update`
-Fetch the latest nodes data from the ComfyUI registry and update the local `nodes.json` file.
-- Automatically runs if `nodes.json` is not found
-- Shows fetch time and total nodes saved
-- Refreshes the in-memory data for immediate analysis
-
-```bash
-> /update             # Fetch latest data from registry
-```
-
-### `/graph`
-Create interactive visualizations of node data using plotly.
-- Opens graphs in your default web browser
-- Supports all modifiers (&save, &top, &nodes)
-- Three types of visualizations available:
-
-**Cumulative Dependencies Graph:**
-Shows how unique dependencies accumulate as nodes are added by rank.
-```bash
-> /graph cumulative          # Show cumulative dependencies
-> /graph cumulative &top 100 # Show for top 100 nodes
-> /graph cumulative &save    # Save to HTML file
-```
-
-**Total Downloads Graph:**
-Displays total downloads per node pack, sorted by rank (popularity).
-```bash
-> /graph downloads                  # Linear scale (default)
-> /graph downloads log              # Logarithmic scale
-> /graph downloads indicators       # Linear scale with percentage milestones
-> /graph downloads log indicators   # Log scale with percentage milestones
-> /graph downloads &top 50          # Top 50 nodes only
-```
-
-The downloads graph supports:
-- **Scaling options:**
-  - Linear scale (default): Shows true proportional differences
-  - Logarithmic scale: Useful for datasets with large ranges
-- **Percentage indicators** (optional): Shows vertical markers at nodes that account for 50%, 75%, 90%, and 99% of total downloads, helping visualize download concentration
-
-**Dependency Count Graph:**
-Displays dependency count per node pack, sorted by rank (popularity).
-```bash
-> /graph deps              # Show dependency counts (linear scale only)
-> /graph deps &top 50      # Top 50 nodes only
-> /graph deps &save        # Save to HTML file
-```
-
-The deps graph:
-- Shows dependency count on y-axis
-- Nodes ranked by downloads (same as downloads graph)
-- Useful for visualizing dependency patterns across popularity rankings
-- Does not support log scale (dependency counts are relatively low)
-
-### `/help`
-Display help information about available commands and modifiers.
-
-```bash
-> /help
-```
-
-### `/quit`
-Exit interactive mode. Alternatives: `/exit`, `/q`
-
-```bash
-> /quit
-```
-
-## Search Modifiers
-
-Modifiers can be combined with commands and searches to customize output.
-
-### `&save`
-Save the results to a timestamped file in the `results/` directory.
-
-```bash
-> numpy &save
-> /list &dupes &save
-```
-
-### `&all`
-Show all results without limiting output (default shows first 10-20 items).
-
-```bash
-> scipy &all
-> /nodes &all
-```
-
-### `&top N`
-Filter results to only include the top N nodes by downloads.
-- Use positive numbers for most downloaded: `&top 100`
-- Use negative numbers for least downloaded: `&top -10`
-
-```bash
-> numpy &top 50       # Search numpy in top 50 nodes
-> /list &top -20      # List dependencies in bottom 20 nodes
-```
-
-### `&dupes` (for /list only)
-Show dependencies with multiple version specifications, helping identify version conflicts.
-
-```bash
-> /list &dupes
-> /list &dupes &top 100
-```
-
-### `&nodes`
-Filter results to only include specific nodes by their IDs.
-
-**Comma-separated list:**
-```bash
-> numpy &nodes comfyui-kjnodes,rgthree-comfy
-> /top &nodes node1,node2,node3
-```
-
-**From a file:**
-```bash
-> numpy &nodes file:nodelist.txt
-> /list &nodes file:path/to/nodes.txt &dupes
-```
-
-The file should contain one node ID per line.
-
-### `&stat <name>`
-Filter results to only include nodes that have a specific stat. Only works with `/nodes` command.
-
-Stats are automatically discovered from subdirectories in the `node-stats/` directory. Each subdirectory name becomes a stat that can be filtered.
-
-```bash
-> /nodes &stat web-dirs              # Show nodes with web directories
-> /nodes &stat routes &top 50        # Show top 50 nodes with routes
-> /nodes &stat pip-calls &all        # Show all nodes with pip calls
-> /nodes &stat web-dirs &stat routes # Show nodes with both stats
-```
-
-**Available stats** (auto-discovered):
-- `web-dirs` - Nodes with .py files containing WEB_DIRECTORY variable
-- `routes` - Nodes with .py files containing route-any decorator
-- `pip-calls` - Nodes with direct pip calls
-- Any custom stats added to `node-stats/` directory
-
-**Features:**
-- Can be combined with &top, &all, &save modifiers
-- Multiple &stat filters can be used together (nodes must match ALL filters)
-- Stat counts are shown in results (e.g., "Web Directories: 1 | Routes: 3")
-
-### `/update-reqs`
-Fetch actual dependencies from requirements.txt files in repositories.
-
-```bash
-> /update-reqs &nodes comfyui-kjnodes      # Update single node
-> /update-reqs &top 10                     # Update top 10 nodes
-> /update-reqs &stat web-dirs              # Update nodes with web directories
-```
-
-- Updates dependencies in-place for current session
-- Original dependencies are backed up
-- Supports GitHub repositories
-- Can be combined with &nodes, &top, and &stat modifiers
-
-## Dependency Searches
-
-Search for specific dependencies by typing their name directly.
-
-### Simple Search
-```bash
-> numpy               # Find all nodes using numpy
-> opencv-python       # Find all nodes using opencv-python
-```
-
-### Wildcard Search
-Use `*` for pattern matching:
-```bash
-> torch*             # Find torch, torchvision, torchaudio, etc.
-> *video*            # Find all dependencies where video appears in the name
-> transformers*      # Find transformers and related packages
-```
-
-### Search Output Includes:
-- **Rank**: Global rank among all registry nodes
-- **Downloads**: Total download count
-- **Stars**: GitHub stars
-- **Latest**: Date of most recent version
-- **Spec**: Exact dependency specification used
-- **Repository**: GitHub repository URL
-
-## Examples
-
-### Find all packages using numpy in top 100 most popular nodes
-```bash
-python analysis.py -e "numpy &top 100"
-```
-
-### Search for all torch-related packages and save results
-```bash
-python analysis.py -e "torch* &save"
-```
-
-### Show dependencies with version conflicts in top 50 nodes
-```bash
-python analysis.py -e "//list &dupes &top 50"
-```
-
-### Get summary of the entire dataset
-```bash
-python analysis.py -e "//summary"
-```
-
-### Analyze dependencies for specific nodes from a file
-```bash
-python analysis.py -e "//list &nodes file:my_nodes.txt &dupes"
-```
-
-### Create visualization graphs
-```bash
-python analysis.py -e "//graph cumulative &top 100"           # Cumulative dependencies for top 100
-python analysis.py -e "//graph downloads &save"               # Downloads graph saved to HTML
-python analysis.py -e "//graph downloads log &top 50"         # Log scale downloads for top 50
-python analysis.py -e "//graph downloads indicators"          # Downloads with percentage milestones
-python analysis.py -e "//graph downloads log indicators &save" # Log scale with indicators, saved
-python analysis.py -e "//graph deps"                          # Dependency count graph
-python analysis.py -e "//graph deps &top 100 &save"           # Deps for top 100, saved
-```
-
-### View dependency information for a specific node
-```bash
+# View a specific node's dependencies
 python analysis.py -e "//nodes comfyui-kjnodes"
-python analysis.py -e "//nodes kjnodes!"                      # Auto-select first match
+
+# Update deps from requirements.txt for top 20 nodes
+python analysis.py -e "//update-reqs &top 20"
+
+# Filter nodes by stat
+python analysis.py -e "//nodes &stat web-dirs &top 50"
 ```
 
-### Update dependencies from requirements.txt for top nodes
-```bash
-python analysis.py -e "/update-reqs &top 20"
-```
-
-### Filter nodes by stats
-```bash
-python analysis.py -e "//nodes &stat web-dirs"              # Show all nodes with web directories
-python analysis.py -e "//nodes &stat routes &top 50"        # Show top 50 nodes with routes
-python analysis.py -e "//nodes &stat pip-calls &all &save"  # Show and save all nodes with pip calls
-python analysis.py -e "//nodes &stat routes &stat web-dirs" # Show nodes with both stats
-```
-
-### Interactive session workflow
-```bash
-$ python analysis.py
-> /summary           # Get overview
-> /top               # See most common dependencies
-> numpy              # Analyze numpy usage
-> torch* &all        # See all torch-related packages
-> /list &dupes       # Check for version conflicts
-> /nodes &top 10     # See top 10 nodes by downloads
-> /nodes comfyui-kjnodes  # View detailed deps for a specific node
-> /nodes kjnodes!    # Quick jump to first matching node
-> /nodes &stat web-dirs &top 20      # Show top 20 nodes with web directories
-> /nodes &stat routes &top 10           # Show top 10 nodes with routes
-> /nodes &stat routes &stat pip-calls   # Show nodes with both routes and pip calls
-> /update-reqs &nodes comfyui-kjnodes  # Update deps from requirements.txt
-> /update-reqs &top 5  # Update top 5 nodes with actual requirements
-> /graph cumulative  # View cumulative dependencies graph
-> /graph downloads log  # View downloads with log scale
-> /graph deps        # View dependency counts by popularity rank
-> numpy &nodes comfyui-kjnodes,rgthree-comfy  # Check numpy in specific nodes
-> /quit              # Exit
-```
-
-## Output Files
-
-When using the `&save` modifier, results are saved to the `results/` directory with timestamps:
+## Architecture
 
 ```
-results/
-├── 20241007_220049_numpy.txt
-├── 20241007_220806_scipy_all.txt
-├── 20241007_221630_scipy_top_100_all.txt
-├── 20241007_223354_list_dupes_dupes_top_50.txt
-└── 20241007_222019_nodes_top_10.txt
+core/               Core library modules
+  registry.py         Registry API client
+  data.py             Node data loading and session init
+  dependencies.py     Dependency compilation and analysis
+  requirements.py     requirements.txt fetching/parsing
+  modifiers.py        Query modifier parsing and filtering
+  cache.py            Disk cache management
+  formatters.py       CLI output formatting
+  utils.py            Shared utilities
+dep_tui/            Textual TUI application
+  app.py              Main App class and keybindings
+  state.py            Shared application state
+  screens/            Screen implementations (node list, dep search, dashboard, detail views)
+analysis.py         CLI entry point
 ```
 
-File naming format: `YYYYMMDD_HHMMSS_queryname.txt`
+## Data & Caching
 
-## Data Source
+Node data is cached in `.cache/` after the first fetch from the ComfyUI registry. On subsequent runs the cached data is loaded instantly.
 
-The tool analyzes data from `manager-files/nodes.json`, which contains information about ComfyUI node packages including:
-- Package metadata (name, description, repository)
-- Download and star counts
-- Dependency specifications
-- Version information
+- Use `/update` (CLI) or `u` (TUI) to refresh from the registry
+- Cache staleness is shown in the TUI status bar
+- Requirements.txt updates (via `/update-reqs`) are session-scoped
 
-The data is automatically fetched from the ComfyUI registry if `nodes.json` is not present. You can update it anytime using the `/update` command to get the latest node information.
+## Requirements
 
-## Special Dependency Handling
-
-### Commented Dependencies
-Dependencies starting with `#` are treated as commented (inactive) and tracked separately. Inline comments (text after `#`) are also stripped from dependency lines.
-
-### Pip Commands
-Lines starting with `--` are pip installation flags (e.g., `--extra-index-url`) and are tracked separately.
-
-### Git-based Dependencies
-Dependencies installed directly from git repositories are tracked separately:
-- **git+ prefix**: Dependencies starting with `git+` (e.g., `git+https://github.com/user/repo.git`)
-- **@ git+ style**: Dependencies with `@ git+` format (e.g., `package @ git+https://github.com/user/repo.git`)
-
-These are displayed separately in the summary with breakdown by type.
-
-### Version Grouping
-Different versions of the same package (e.g., `numpy`, `numpy>=1.20`, `numpy==1.24.0`) are grouped together for accurate statistics while preserving version information.
-
-## Tips
-
-1. **Combine modifiers** for powerful queries:
-   ```bash
-   > numpy &top 100 &all &save
-   ```
-
-2. **Use wildcards** to discover related packages:
-   ```bash
-   > *audio*
-   > transformers*
-   ```
-
-3. **Check for version conflicts** regularly:
-   ```bash
-   > /list &dupes
-   ```
-
-4. **Filter by popularity** to focus on widely-used nodes:
-   ```bash
-   > scipy &top 50
-   ```
-
-5. **Save important searches** for later reference:
-   ```bash
-   > torch &all &save
-   ```
-
-6. **Analyze specific node sets** to focus on particular packages:
-   ```bash
-   > /list &nodes file:production_nodes.txt &dupes
-   > numpy &nodes comfyui-kjnodes,comfyui-easy-use
-   ```
+- Python 3.10+
+- `requests` — registry API access
+- `textual` — TUI framework (for `python -m dep_tui`)

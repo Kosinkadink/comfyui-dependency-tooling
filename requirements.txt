@@ -1,2 +1,3 @@
 requests
-plotly
+textual
+textual-plotext

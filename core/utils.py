@@ -189,62 +189,6 @@ def parse_python_files_csv(csv_file_path, file_extension='.py'):
     return file_map
 
 
-def load_csv_data_to_nodes(nodes_dict, csv_directory, node_key):
-    """
-    Generic function to load CSV data and map to nodes.
-
-    Args:
-        nodes_dict: Dictionary of nodes to update (modified in-place)
-        csv_directory: Path to directory containing CSV files
-        node_key: Key to store data in (e.g., '_web_directories', '_routes')
-
-    Returns:
-        Number of nodes updated with data
-    """
-    csv_path = Path(csv_directory)
-    if not csv_path.exists():
-        return 0
-
-    # Find all CSV files
-    csv_files = list(csv_path.glob('*.csv'))
-    if not csv_files:
-        return 0
-
-    # Parse all CSV files and collect data
-    # Use a loop to merge sets from multiple CSV files for the same repo
-    all_data = {}
-    for csv_file in csv_files:
-        csv_data = parse_python_files_csv(csv_file)
-        for repo, files in csv_data.items():
-            if repo in all_data:
-                # Merge file sets if repo already exists
-                all_data[repo].update(files)
-            else:
-                all_data[repo] = files
-
-    # Map repository URLs to node IDs and add to nodes_dict
-    count = 0
-
-    for node_id, node_data in nodes_dict.items():
-        repo = node_data.get('repository', '')
-        if not repo or repo == 'N/A':
-            continue
-
-        # Normalize repository URL for matching
-        repo_normalized = normalize_repository_url(repo)
-
-        # Check if this repo has data
-        for csv_repo, file_paths in all_data.items():
-            csv_repo_normalized = normalize_repository_url(csv_repo)
-
-            if csv_repo_normalized == repo_normalized:
-                node_data[node_key] = sorted(list(file_paths))
-                count += 1
-                break
-
-    return count
-
-
 def load_all_node_stats(nodes_dict, stats_directory='node-stats'):
     """
     Auto-discover and load all node statistics from subdirectories.
@@ -291,6 +235,9 @@ def load_all_node_stats(nodes_dict, stats_directory='node-stats'):
                 else:
                     all_data[repo] = files
 
+        # Pre-normalize for O(1) lookup
+        normalized_data = {normalize_repository_url(repo): files for repo, files in all_data.items()}
+
         # Map repository URLs to node IDs and add to nodes_dict
         count = 0
         for node_id, node_data in nodes_dict.items():
@@ -300,14 +247,9 @@ def load_all_node_stats(nodes_dict, stats_directory='node-stats'):
 
             repo_normalized = normalize_repository_url(repo)
 
-            # Check if this repo has data for this stat
-            for csv_repo, file_paths in all_data.items():
-                csv_repo_normalized = normalize_repository_url(csv_repo)
-
-                if csv_repo_normalized == repo_normalized:
-                    node_data['_stats'][stat_name] = sorted(list(file_paths))
-                    count += 1
-                    break
+            if repo_normalized in normalized_data:
+                node_data['_stats'][stat_name] = sorted(list(normalized_data[repo_normalized]))
+                count += 1
 
         stat_counts[stat_name] = count
 
@@ -426,72 +368,6 @@ def load_extension_node_map(nodes_dict, json_file_path='manager-files/extension-
                     count += 1
 
     return count
-
-
-def load_missing_nodes_csvs(csv_dir='missing-nodes'):
-    """
-    Load CSV files from the missing-nodes directory and extract node IDs.
-
-    CSV format:
-    - Column 1: content (quoted list of node IDs)
-    - Column 2: metadata
-
-    Args:
-        csv_dir: Directory containing the CSV files
-
-    Returns:
-        List of node IDs found across all CSV files
-    """
-    import csv
-    import ast
-
-    csv_path = Path(csv_dir)
-    if not csv_path.exists() or not csv_path.is_dir():
-        return []
-
-    all_node_ids = []
-
-    # Find all CSV files in the directory
-    csv_files = list(csv_path.glob('*.csv'))
-
-    if not csv_files:
-        return []
-
-    for csv_file in csv_files:
-        try:
-            with open(csv_file, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-
-                for row in reader:
-                    content = row.get('content', '').strip()
-
-                    if not content:
-                        continue
-
-                    # The content is a quoted list, so we need to parse it
-                    # It might be a Python list literal like "['NodeA', 'NodeB']"
-                    # or a JSON-style list like '["NodeA", "NodeB"]'
-                    try:
-                        # Try to evaluate it as a Python literal
-                        node_list = ast.literal_eval(content)
-
-                        if isinstance(node_list, list):
-                            all_node_ids.extend(node_list)
-                        elif isinstance(node_list, str):
-                            # Single node ID
-                            all_node_ids.append(node_list)
-                    except (ValueError, SyntaxError):
-                        # If that fails, try to parse it as a simple string
-                        # Remove quotes and brackets if present
-                        cleaned = content.strip('[]"\' ')
-                        if cleaned:
-                            all_node_ids.append(cleaned)
-
-        except Exception as e:
-            print(f"Warning: Could not load {csv_file}: {e}")
-            continue
-
-    return all_node_ids
 
 
 def map_node_ids_to_packs(node_ids, nodes_dict):
