@@ -1,0 +1,129 @@
+/* Dep Analyzer TUI — dark theme */
+
+Screen {
+    background: $surface;
+}
+
+/* Shared table styling */
+DataTable {
+    height: 1fr;
+}
+
+/* Status bar at the bottom of each screen */
+.status-bar {
+    dock: bottom;
+    height: 1;
+    background: $primary-background;
+    color: $text;
+    padding: 0 1;
+}
+
+/* Filter bar above status */
+.filter-bar {
+    dock: bottom;
+    height: 1;
+    background: $surface-darken-1;
+    color: $text-muted;
+    padding: 0 1;
+}
+
+/* Search input */
+.search-input {
+    dock: top;
+    height: 1;
+    margin: 0 1;
+    border: none;
+    padding: 0 1;
+}
+
+/* Dashboard panels */
+.stat-panel {
+    height: auto;
+    padding: 1 2;
+    margin: 0 1 1 1;
+    border: solid $primary;
+}
+
+.stat-panel .panel-title {
+    text-style: bold;
+    color: $text;
+}
+
+/* Node detail screen */
+.detail-section {
+    margin: 0 1 1 1;
+    padding: 1 2;
+    border: solid $primary-darken-1;
+    height: auto;
+}
+
+.detail-header {
+    text-style: bold;
+    color: $accent;
+    margin: 0 0 1 0;
+}
+
+/* Scrollable content area */
+.scroll-body {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+/* Top N input modal */
+#top-n-input {
+    dock: top;
+    height: 1;
+    margin: 0 1;
+    border: none;
+    padding: 0 1;
+}
+
+/* Update modal */
+UpdateScreen {
+    align: center middle;
+}
+
+#update-title {
+    text-style: bold;
+    padding: 1 2;
+}
+
+#update-progress {
+    margin: 0 2;
+}
+
+#update-log {
+    height: 1fr;
+    margin: 1 2;
+    border: solid $primary-darken-1;
+    padding: 1;
+}
+
+#update-status {
+    dock: bottom;
+    height: 1;
+    background: $primary-background;
+    padding: 0 1;
+}
+
+/* Graph screen */
+#graph-info {
+    dock: top;
+    height: 1;
+    background: $primary-background;
+    color: $text;
+    padding: 0 1;
+}
+
+#graph-plot {
+    height: 1fr;
+}
+
+/* Stat input */
+#stat-input {
+    dock: top;
+    height: 1;
+    margin: 0 1;
+    border: none;
+    padding: 0 1;
+}
